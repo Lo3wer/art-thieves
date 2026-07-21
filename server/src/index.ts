@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { networkInterfaces } from 'os';
 
 const app = express();
 const PORT = 3001;
@@ -43,6 +44,8 @@ app.post('/api/heists', (req, res) => {
   res.status(201).json(heist);
 });
 
-app.listen(PORT, () => {
-  console.log(`Vancouver Art Thieves server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  const nets = networkInterfaces();
+  const ip = Object.values(nets).flat().find(n => n && n.family === 'IPv4' && !n.internal)?.address || 'unknown';
+  console.log(`Vancouver Art Thieves server running on http://localhost:${PORT} (LAN: http://${ip}:${PORT})`);
 });
