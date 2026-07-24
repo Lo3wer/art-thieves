@@ -15,6 +15,8 @@ import {
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition } from '../game/logic';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
 
+const FREEZE_DURATION_MS = 10 * 60 * 1000;
+
 const router = Router();
 
 function p(v: string | string[] | undefined): string {
@@ -196,7 +198,22 @@ function isTeamFrozen(gameId: string, teamId: string): boolean {
   const activeTag = store.getActiveTag(gameId, teamId);
   if (!activeTag) return false;
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
-  return elapsed < 10 * 60 * 1000;
+  return elapsed < FREEZE_DURATION_MS;
+}
+
+function getFrozenTeams(gameId: string): { teamId: string; frozenUntil: string }[] {
+  const teams = store.getTeamsByGame(gameId);
+  const frozen: { teamId: string; frozenUntil: string }[] = [];
+  for (const team of teams) {
+    const tag = store.getActiveTag(gameId, team.id);
+    if (tag) {
+      const elapsed = Date.now() - new Date(tag.timestamp).getTime();
+      if (elapsed < FREEZE_DURATION_MS) {
+        frozen.push({ teamId: team.id, frozenUntil: new Date(new Date(tag.timestamp).getTime() + FREEZE_DURATION_MS).toISOString() });
+      }
+    }
+  }
+  return frozen;
 }
 
 function checkWinAndEnd(gameId: string): void {
@@ -288,7 +305,11 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
 
   const tag = store.addTagEvent(game.id, teamId, targetTeamId);
   store.addLogEntry(game.id, 'tag_created', { tagger: tag.taggerTeamId, target: tag.targetTeamId });
-  broadcastToGame(game.id, 'team_frozen', { teamId: targetTeamId });
+  broadcastToGame(game.id, 'team_frozen', {
+    teamId: targetTeamId,
+    tagTimestamp: tag.timestamp,
+    frozenUntil: new Date(Date.now() + FREEZE_DURATION_MS).toISOString(),
+  });
   broadcastState(game.id);
   res.status(201).json(tag);
 });
@@ -325,6 +346,12 @@ router.get('/games/:id/scoreboard', (req, res) => {
   const states = store.getLandmarkStates(game.id);
   const scores = computeScoreboard(teams, states);
   res.json(scores);
+});
+
+router.get('/games/:id/frozen-teams', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  res.json(getFrozenTeams(game.id));
 });
 
 router.get('/games/:id/log', (req, res) => {

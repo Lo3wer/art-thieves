@@ -2,6 +2,12 @@ import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition } from '../game/logic';
 
+const FREEZE_MS = 10 * 60 * 1000;
+
+function getFrozenUntil(): string {
+  return new Date(Date.now() + FREEZE_MS).toISOString();
+}
+
 export function registerGameHandlers(io: Server): void {
   const gameNsp = io.of('/game');
 
@@ -117,8 +123,7 @@ function isTeamFrozen(gameId: string, teamId: string): boolean {
   const activeTag = store.getActiveTag(gameId, teamId);
   if (!activeTag) return false;
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
-  const freezeMs = 10 * 60 * 1000;
-  return elapsed < freezeMs;
+  return elapsed < FREEZE_MS;
 }
 
 function processClaim(
@@ -217,10 +222,14 @@ function processTag(
     if (elapsed < game.config.reTagCooldown * 1000) throw new Error('Re-tag cooldown active');
   }
 
-  store.addTagEvent(gameId, taggerTeamId, targetTeamId);
+  const tag = store.addTagEvent(gameId, taggerTeamId, targetTeamId);
   store.addLogEntry(gameId, 'tag_created', { taggerTeamId, targetTeamId });
   broadcastState(nsp, gameId);
-  nsp.to(`game:${gameId}`).emit('team_frozen', { teamId: targetTeamId });
+  nsp.to(`game:${gameId}`).emit('team_frozen', {
+    teamId: targetTeamId,
+    tagTimestamp: tag.timestamp,
+    frozenUntil: getFrozenUntil(),
+  });
 }
 
 function processDispute(

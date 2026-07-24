@@ -124,4 +124,6 @@ export const api = USE_MOCKS
         return request<unknown[]>(`/api/games/${gameId}/log${params}`);
       },
       getActiveTag: async (_gameId: string, _teamId: string) => null,
+      getFrozenTeams: (gameId: string) =>
+        request<{ teamId: string; frozenUntil: string }[]>(`/api/games/${gameId}/frozen-teams`),
     };

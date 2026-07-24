@@ -29,17 +29,25 @@ export function connectSocket(gameId: string, teamId: string): Socket {
     useLocationStore.getState().updateTeamLocation(data);
   });
 
-  socket.on('team_frozen', (data: { teamId: string }) => {
+  socket.on('team_frozen', (data: { teamId: string; tagTimestamp: string; frozenUntil: string }) => {
     const myId = useTeamStore.getState().myTeamId;
+    useTeamStore.getState().addFrozenTeam(data.teamId, data.frozenUntil);
     if (data.teamId === myId) {
-      useTeamStore.getState().setFrozen(true, new Date(Date.now() + 10 * 60 * 1000).toISOString());
+      useTeamStore.getState().setFrozen(true, data.frozenUntil);
+      const game = useGameStore.getState().game;
+      if (game) {
+        const disputeEnd = new Date(new Date(data.tagTimestamp).getTime() + (game.config.disputeWindow ?? 60) * 1000).toISOString();
+        useTeamStore.getState().setDisputeWindow(disputeEnd);
+      }
     }
   });
 
   socket.on('tag_disputed', (data: { teamId: string }) => {
+    useTeamStore.getState().removeFrozenTeam(data.teamId);
     const myId = useTeamStore.getState().myTeamId;
     if (data.teamId === myId) {
       useTeamStore.getState().setFrozen(false);
+      useTeamStore.getState().setDisputeWindow(null);
     }
   });
 
