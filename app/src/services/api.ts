@@ -90,4 +90,6 @@ export const api = USE_MOCKS
         const params = teamId ? `?teamId=${teamId}` : '';
         return request<unknown[]>(`/api/games/${gameId}/log${params}`);
       },
+      setCurrentTeam: (_teamId: string | null) => {},
+      getActiveTag: async (_gameId: string, _teamId: string) => null,
     };
