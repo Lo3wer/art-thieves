@@ -18,6 +18,7 @@ export interface GameMap {
   defaultVicinityRadius: number;
   winThreshold: number;
   data: GeoFeatureCollection;
+  landmarkCount?: number;
 }
 
 export interface Team {

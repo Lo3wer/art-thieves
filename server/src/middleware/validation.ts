@@ -27,7 +27,7 @@ export const gameMapSchema = z.object({
 });
 
 export const createGameSchema = z.object({
-  mapId: z.string().uuid(),
+  mapId: z.string().min(1),
   config: z.object({
     duration: z.number().positive(),
     vicinityRadius: z.number().positive(),
@@ -44,15 +44,20 @@ export const joinGameSchema = z.object({
 
 export const claimSchema = z.object({
   landmarkId: z.string().uuid(),
+  teamId: z.string().uuid(),
+  latitude: z.number(),
+  longitude: z.number(),
 });
 
 export const challengeSchema = z.object({
   landmarkId: z.string().uuid(),
   outcome: z.enum(['complete', 'fail', 'veto']),
+  teamId: z.string().uuid(),
 });
 
 export const tagSchema = z.object({
   targetTeamId: z.string().uuid(),
+  teamId: z.string().uuid(),
 });
 
 export const pushTokenSchema = z.object({

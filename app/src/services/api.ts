@@ -1,7 +1,8 @@
 import type { Game, GameMap, Team, GameConfig } from '../types';
 import { API_BASE } from '../../api';
+import { useTeamStore } from '../stores/useTeamStore';
 
-const USE_MOCKS = true;
+const USE_MOCKS = false;
 
 async function request<T>(
   path: string,
@@ -18,9 +19,15 @@ async function request<T>(
   return res.json();
 }
 
+function getTeamId(): string {
+  return useTeamStore.getState().myTeamId ?? '';
+}
+
 export const api = USE_MOCKS
   ? require('./__mocks__/api').mockApi
   : {
+      setCurrentTeam: (_teamId: string | null) => {},
+
       fetchMaps: () => request<GameMap[]>('/api/maps'),
       getMap: (id: string) => request<GameMap>(`/api/maps/${id}`),
       importMap: (data: unknown) =>
@@ -34,7 +41,7 @@ export const api = USE_MOCKS
           body: JSON.stringify({ mapId, config }),
         }),
       joinGame: (joinCode: string, name: string, color: string) =>
-        request<{ game: Game; team: Team }>(`/api/games/${joinCode}/join`, {
+        request<{ game: Game; team: Team }>(`/api/games/join/${joinCode}`, {
           method: 'POST',
           body: JSON.stringify({ name, color }),
         }),
@@ -51,38 +58,41 @@ export const api = USE_MOCKS
       resumeGame: (gameId: string) =>
         request<void>(`/api/games/${gameId}/resume`, { method: 'PUT' }),
       endGame: (gameId: string) =>
-        request<void>(`/api/games/${gameId}/end`, { method: 'PUT' }),
-      claimLandmark: (gameId: string, landmarkId: string) =>
+        request<{ winnerId: string | null; isTie: boolean }>(`/api/games/${gameId}/end`, { method: 'PUT' }),
+      claimLandmark: (gameId: string, landmarkId: string, latitude: number, longitude: number) =>
         request<void>(`/api/games/${gameId}/claim`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId }),
+          body: JSON.stringify({ landmarkId, teamId: getTeamId(), latitude, longitude }),
         }),
       completeChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'complete' }),
+          body: JSON.stringify({ landmarkId, outcome: 'complete', teamId: getTeamId() }),
         }),
       failChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'fail' }),
+          body: JSON.stringify({ landmarkId, outcome: 'fail', teamId: getTeamId() }),
         }),
       vetoChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'veto' }),
+          body: JSON.stringify({ landmarkId, outcome: 'veto', teamId: getTeamId() }),
         }),
       tagTeam: (gameId: string, targetTeamId: string) =>
         request<void>(`/api/games/${gameId}/tag`, {
           method: 'POST',
-          body: JSON.stringify({ targetTeamId }),
+          body: JSON.stringify({ targetTeamId, teamId: getTeamId() }),
         }),
       disputeTag: (gameId: string) =>
-        request<void>(`/api/games/${gameId}/dispute`, { method: 'POST' }),
+        request<void>(`/api/games/${gameId}/dispute`, {
+          method: 'POST',
+          body: JSON.stringify({ teamId: getTeamId() }),
+        }),
       registerPushToken: (gameId: string, token: string) =>
         request<void>(`/api/games/${gameId}/push-token`, {
           method: 'POST',
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, teamId: getTeamId() }),
         }),
       getScoreboard: (gameId: string) =>
         request<unknown[]>(`/api/games/${gameId}/scoreboard`),
@@ -90,6 +100,5 @@ export const api = USE_MOCKS
         const params = teamId ? `?teamId=${teamId}` : '';
         return request<unknown[]>(`/api/games/${gameId}/log${params}`);
       },
-      setCurrentTeam: (_teamId: string | null) => {},
       getActiveTag: async (_gameId: string, _teamId: string) => null,
     };

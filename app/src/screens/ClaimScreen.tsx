@@ -94,7 +94,7 @@ export default function ClaimScreen() {
 
     setLoading(true);
     try {
-      await api.claimLandmark(game.id, lm.id);
+      await api.claimLandmark(game.id, lm.id, ownLocation!.latitude, ownLocation!.longitude);
       updateLandmarkState({
         landmarkId: lm.id,
         status: 'claimed',

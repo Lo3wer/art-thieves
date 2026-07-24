@@ -260,6 +260,7 @@ export const store = {
   },
 
   // Tags
+  getTagsByGame: (gameId: string) => tagEvents.filter((t) => t.gameId === gameId),
   addTagEvent: (gameId: string, taggerTeamId: string, targetTeamId: string) => {
     const tag: TagEvent = {
       id: uuid(), gameId, taggerTeamId, targetTeamId,

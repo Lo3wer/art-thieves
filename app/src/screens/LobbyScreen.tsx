@@ -6,6 +6,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { api } from '../services/api';
+import { connectSocket, disconnectSocket } from '../services/socket';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { useLobbyStore } from '../stores/useLobbyStore';
@@ -92,6 +93,7 @@ export default function LobbyScreen() {
       setHost(true);
       setGameCode(game.joinCode);
       setRoster([{ name: team.team.name, color: team.team.color }]);
+      connectSocket(game.id, team.team.id);
       setView('waiting');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to create game');
@@ -119,6 +121,7 @@ export default function LobbyScreen() {
         ...existingTeams.map((t: any) => ({ name: t.name, color: t.color })),
         { name: team.name, color: team.color },
       ]);
+      connectSocket(game.id, team.id);
       setView('waiting');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to join game');
@@ -143,6 +146,7 @@ export default function LobbyScreen() {
   };
 
   const handleLeaveGame = () => {
+    disconnectSocket();
     clearTeam();
     clearGame();
     setView('home');
@@ -236,7 +240,7 @@ export default function LobbyScreen() {
             >
               <Text style={styles.mapName}>{item.name}</Text>
               <Text style={styles.mapDetail}>
-                {item.data.features.filter((f) => f.properties?.type === 'landmark').length} landmarks
+                {item.landmarkCount ?? item.data?.features?.filter((f: any) => f.properties?.type === 'landmark').length ?? 0} landmarks
               </Text>
             </TouchableOpacity>
           )}
