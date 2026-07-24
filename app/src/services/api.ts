@@ -4,6 +4,16 @@ import { useTeamStore } from '../stores/useTeamStore';
 
 const USE_MOCKS = false;
 
+export class ApiError extends Error {
+  status: number;
+  data?: any;
+  constructor(status: number, message: string, data?: any) {
+    super(message);
+    this.status = status;
+    this.data = data;
+  }
+}
+
 async function request<T>(
   path: string,
   options?: RequestInit
@@ -13,8 +23,17 @@ async function request<T>(
     ...options,
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`HTTP ${res.status}: ${body}`);
+    let body: any;
+    try {
+      body = await res.json();
+    } catch {
+      body = await res.text();
+    }
+    throw new ApiError(
+      res.status,
+      typeof body === 'string' ? body : body.error ?? `HTTP ${res.status}`,
+      typeof body === 'object' && body.data ? body.data : undefined
+    );
   }
   return res.json();
 }
@@ -40,6 +59,10 @@ export const api = USE_MOCKS
           method: 'POST',
           body: JSON.stringify({ mapId, config }),
         }),
+      lookupGame: (joinCode: string) =>
+        request<{ id: string; status: string; teams: { id: string; name: string; color: string }[] }>(
+          `/api/games/lookup/${joinCode}`
+        ),
       joinGame: (joinCode: string, name: string, color: string) =>
         request<{ game: Game; team: Team }>(`/api/games/join/${joinCode}`, {
           method: 'POST',

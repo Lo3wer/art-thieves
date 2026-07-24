@@ -201,7 +201,13 @@ export const store = {
 
   // Teams
   getTeamsByGame: (gameId: string) => teams.filter((t) => t.gameId === gameId),
+  isTeamNameTaken: (gameId: string, name: string) =>
+    teams.some((t) => t.gameId === gameId && t.name.toLowerCase() === name.toLowerCase()),
+  isTeamColorTaken: (gameId: string, color: string) =>
+    teams.some((t) => t.gameId === gameId && t.color === color),
   addTeam: (gameId: string, name: string, color: string) => {
+    if (store.isTeamNameTaken(gameId, name)) throw new Error('Team name already taken');
+    if (store.isTeamColorTaken(gameId, color)) throw new Error('Team color already taken');
     const team: Team = { id: uuid(), gameId, name, color };
     teams.push(team);
     return team;

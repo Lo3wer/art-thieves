@@ -98,21 +98,36 @@ router.post('/games', validate(createGameSchema), (req, res) => {
   });
 });
 
+router.get('/games/lookup/:joinCode', (req, res) => {
+  const game = store.getGameByJoinCode(p(req.params.joinCode));
+  if (!game) throw new AppError(404, 'Game not found');
+  res.json({
+    id: game.id,
+    status: game.status,
+    teams: store.getTeamsByGame(game.id).map((t) => ({ id: t.id, name: t.name, color: t.color })),
+  });
+});
+
 router.post('/games/join/:joinCode', validate(joinGameSchema), (req, res) => {
   const game = store.getGameByJoinCode(p(req.params.joinCode));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'lobby') throw new AppError(400, 'Game already started');
-  const team = store.addTeam(game.id, req.body.name, req.body.color);
-  store.addLogEntry(game.id, 'team_joined', { teamId: team.id, teamName: team.name });
-  res.status(201).json({
-    game: {
-      ...game,
-      teams: store.getTeamsByGame(game.id),
-      landmarks: store.getLandmarksByGame(game.id),
-      landmarkStates: store.getLandmarkStates(game.id),
-    },
-    team,
-  });
+  try {
+    const team = store.addTeam(game.id, req.body.name, req.body.color);
+    store.addLogEntry(game.id, 'team_joined', { teamId: team.id, teamName: team.name });
+    res.status(201).json({
+      game: {
+        ...game,
+        teams: store.getTeamsByGame(game.id),
+        landmarks: store.getLandmarksByGame(game.id),
+        landmarkStates: store.getLandmarkStates(game.id),
+      },
+      team,
+    });
+  } catch (err: any) {
+    const existing = store.getTeamsByGame(game.id).map((t) => ({ name: t.name, color: t.color }));
+    throw new AppError(409, err.message, { existing });
+  }
 });
 
 router.post('/games/:id/start', (req, res) => {

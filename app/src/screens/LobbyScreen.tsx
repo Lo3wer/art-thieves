@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { api } from '../services/api';
+import { api, ApiError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
@@ -35,6 +35,8 @@ export default function LobbyScreen() {
   const [teamColor, setTeamColor] = useState(TEAM_COLORS[0]);
   const [roster, setRoster] = useState<{ name: string; color: string }[]>([]);
   const [gameCode, setGameCode] = useState('');
+  const [existingJoinTeams, setExistingJoinTeams] = useState<{ name: string; color: string }[]>([]);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setGame = useGameStore((s) => s.setGame);
   const setMyTeam = useTeamStore((s) => s.setMyTeam);
@@ -61,6 +63,26 @@ export default function LobbyScreen() {
       setMaps(availableMaps);
     }
   }, [availableMaps, loadMaps]);
+
+  const takenColors = new Set(existingJoinTeams.map((t) => t.color));
+  const takenNames = new Set(existingJoinTeams.map((t) => t.name.toLowerCase()));
+
+  useEffect(() => {
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    if (joinCode.trim().length < 4) {
+      setExistingJoinTeams([]);
+      return;
+    }
+    lookupTimer.current = setTimeout(async () => {
+      try {
+        const data = await api.lookupGame(joinCode.trim().toUpperCase());
+        setExistingJoinTeams(data.teams ?? []);
+      } catch {
+        setExistingJoinTeams([]);
+      }
+    }, 500);
+    return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current); };
+  }, [joinCode]);
 
   const handleImportMap = async () => {
     try {
@@ -124,7 +146,13 @@ export default function LobbyScreen() {
       connectSocket(game.id, team.id);
       setView('waiting');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to join game');
+      const msg = e.message ?? 'Failed to join game';
+      if (e instanceof ApiError && e.data?.existing) {
+        const taken = e.data.existing.map((t: any) => `${t.name} (${t.color})`).join(', ');
+        Alert.alert('Already Taken', `${msg}\n\nExisting teams: ${taken}`);
+      } else {
+        Alert.alert('Error', msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -348,14 +376,28 @@ export default function LobbyScreen() {
           placeholder="Enter team name"
         />
         <Text style={styles.fieldLabel}>Team Color</Text>
+        {existingJoinTeams.length > 0 && (
+          <Text style={styles.takenHint}>
+            Teams already in game: {existingJoinTeams.map((t) => t.name).join(', ')}
+          </Text>
+        )}
         <View style={styles.colorRow}>
-          {TEAM_COLORS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.colorSwatch, { backgroundColor: c }, teamColor === c && styles.colorSelected]}
-              onPress={() => setTeamColor(c)}
-            />
-          ))}
+          {TEAM_COLORS.map((c) => {
+            const taken = takenColors.has(c);
+            return (
+              <TouchableOpacity
+                key={c}
+                disabled={taken}
+                style={[
+                  styles.colorSwatch,
+                  { backgroundColor: c },
+                  teamColor === c && styles.colorSelected,
+                  taken && styles.colorTaken,
+                ]}
+                onPress={() => setTeamColor(c)}
+              />
+            );
+          })}
         </View>
         <TouchableOpacity style={styles.primaryButton} onPress={handleJoinGame}>
           <Text style={styles.buttonText}>Join</Text>
@@ -427,6 +469,8 @@ const styles = StyleSheet.create({
   colorRow: { flexDirection: 'row', gap: 12, marginBottom: 16, marginTop: 4 },
   colorSwatch: { width: 36, height: 36, borderRadius: 18 },
   colorSelected: { borderWidth: 3, borderColor: '#1a1a2e' },
+  colorTaken: { opacity: 0.25, borderWidth: 2, borderColor: '#999' },
+  takenHint: { fontSize: 12, color: '#888', marginBottom: 4 },
   list: { flex: 1, marginBottom: 16 },
   mapItem: {
     backgroundColor: '#fff', padding: 16, borderRadius: 8, marginBottom: 8,
