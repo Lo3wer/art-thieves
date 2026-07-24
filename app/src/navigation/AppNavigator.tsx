@@ -22,7 +22,7 @@ const TAB_ICONS: Record<string, string> = {
 
 export default function AppNavigator() {
   const game = useGameStore((s) => s.game);
-  const hasActiveGame = game !== null && game.status !== 'ended';
+  const hasActiveGame = game !== null && game.status !== 'ended' && game.status !== 'lobby';
 
   return (
     <NavigationContainer>
