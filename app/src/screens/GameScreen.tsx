@@ -123,6 +123,11 @@ export default function GameScreen() {
         </View>
       </View>
 
+      <View style={styles.joinCodeBar}>
+        <Text style={styles.joinCodeLabel}>Room Code</Text>
+        <Text style={styles.joinCodeValue}>{game.joinCode}</Text>
+      </View>
+
       {game.status === 'active' && (
         <View style={styles.clockCard}>
           <Text style={styles.clockValue}>{formatTime(timeLeft)}</Text>
@@ -185,6 +190,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e' },
+  joinCodeBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#1a1a2e', paddingVertical: 8, paddingHorizontal: 16,
+    borderRadius: 8, marginBottom: 12, gap: 10,
+  },
+  joinCodeLabel: { fontSize: 12, color: '#aaa', letterSpacing: 1 },
+  joinCodeValue: { fontSize: 20, fontWeight: 'bold', color: '#fff', letterSpacing: 4 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusText: { fontSize: 12, fontWeight: '700', color: '#666', letterSpacing: 1 },

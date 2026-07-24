@@ -11,8 +11,22 @@ import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
 import type { Landmark, LandmarkState } from '../types';
 
+const MINIMAL_MAP_STYLE: any = {
+  version: 8,
+  sources: {
+    carto: {
+      type: 'raster',
+      tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'],
+      tileSize: 256,
+    },
+  },
+  layers: [
+    { id: 'carto-bg', type: 'raster', source: 'carto' },
+  ],
+};
+
 const MAP_STYLE = (Constants.expoConfig?.extra as any)?.mapStyle
-  ?? 'https://tiles.openfreemap.org/styles/liberty';
+  ?? MINIMAL_MAP_STYLE;
 
 export default function MapScreen() {
   const game = useGameStore((s) => s.game);

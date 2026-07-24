@@ -1,5 +1,3 @@
-const MAP_STYLE = process.env.EXPO_PUBLIC_MAP_STYLE || 'https://tiles.openfreemap.org/styles/liberty';
-
 module.exports = {
   expo: {
     name: 'Vancouver Art Thieves',
@@ -26,7 +24,7 @@ module.exports = {
     },
     plugins: ['@maplibre/maplibre-react-native'],
     extra: {
-      mapStyle: MAP_STYLE,
+      ...(process.env.EXPO_PUBLIC_MAP_STYLE ? { mapStyle: process.env.EXPO_PUBLIC_MAP_STYLE } : {}),
     },
   },
 };

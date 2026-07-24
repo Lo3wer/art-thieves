@@ -185,9 +185,10 @@ export default function LobbyScreen() {
       <View style={styles.container}>
         <Text style={styles.title}>Game Lobby</Text>
         <View style={styles.codeCard}>
-          <Text style={styles.codeLabel}>Join Code</Text>
-          <Text style={styles.codeValue}>{gameCode}</Text>
-          <Text style={styles.codeHint}>Share this code with your team</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.codeValue}>{gameCode}</Text>
+          </View>
+          <Text style={styles.codeHint}>Share this code for others to join</Text>
         </View>
         <Text style={styles.sectionTitle}>Teams ({roster.length})</Text>
         <FlatList
@@ -434,12 +435,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f4f8', padding: 12, borderRadius: 8, marginBottom: 16,
   },
   codeCard: {
-    backgroundColor: '#fff', padding: 24, borderRadius: 12, alignItems: 'center',
-    marginVertical: 20, borderWidth: 2, borderColor: '#1a1a2e', borderStyle: 'dashed',
+    backgroundColor: '#fff', padding: 20, borderRadius: 16, alignItems: 'center',
+    marginVertical: 20, borderWidth: 1, borderColor: '#e0e0e0',
   },
-  codeLabel: { fontSize: 14, color: '#666' },
-  codeValue: { fontSize: 36, fontWeight: 'bold', color: '#1a1a2e', letterSpacing: 6, marginVertical: 8 },
-  codeHint: { fontSize: 12, color: '#999' },
+  codeBox: {
+    backgroundColor: '#1a1a2e', paddingVertical: 16, paddingHorizontal: 32,
+    borderRadius: 12, marginVertical: 8,
+  },
+  codeValue: { fontSize: 48, fontWeight: 'bold', color: '#ffffff', letterSpacing: 10 },
+  codeHint: { fontSize: 13, color: '#888' },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a2e', marginTop: 8 },
   rosterList: { flex: 1, marginTop: 8 },
   rosterItem: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderRadius: 8, marginBottom: 6 },
