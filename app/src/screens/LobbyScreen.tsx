@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: GameConfig = {
   winThreshold: 20,
   reTagCooldown: 300,
   disputeWindow: 60,
+  noTagPeriod: 600,
 };
 
 type LobbyView = 'home' | 'host_map_select' | 'host_settings' | 'join' | 'waiting';
@@ -328,6 +329,13 @@ export default function LobbyScreen() {
           keyboardType="number-pad"
           value={String(config.disputeWindow)}
           onChangeText={(t) => setConfig({ ...config, disputeWindow: Math.max(10, parseInt(t) || 10) })}
+        />
+        <Text style={styles.fieldLabel}>No-Tag Grace Period (seconds)</Text>
+        <TextInput
+          style={styles.input}
+          keyboardType="number-pad"
+          value={String(config.noTagPeriod)}
+          onChangeText={(t) => setConfig({ ...config, noTagPeriod: Math.max(0, parseInt(t) || 0) })}
         />
         <Text style={styles.fieldLabel}>Your Team Name</Text>
         <TextInput

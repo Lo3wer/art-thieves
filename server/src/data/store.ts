@@ -93,6 +93,7 @@ export interface Game {
     winThreshold: number;
     reTagCooldown: number;
     disputeWindow: number;
+    noTagPeriod: number;
   };
   startedAt?: string;
   pausedAt?: string;

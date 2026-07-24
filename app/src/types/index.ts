@@ -51,6 +51,7 @@ export interface GameConfig {
   winThreshold: number;
   reTagCooldown: number;
   disputeWindow: number;
+  noTagPeriod: number;
 }
 
 export type GameStatus = 'lobby' | 'active' | 'paused' | 'ended';

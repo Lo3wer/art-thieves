@@ -276,7 +276,7 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
   if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
   const startedAt = game.startedAt ? new Date(game.startedAt).getTime() : 0;
-  if (Date.now() - startedAt < 10 * 60 * 1000) throw new AppError(400, 'Tagging is disabled for the first 10 minutes');
+  if (Date.now() - startedAt < game.config.noTagPeriod * 1000) throw new AppError(400, `Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
   const recentTags = store.getTagsByGame(game.id).filter(
     (t) => t.taggerTeamId === teamId && t.targetTeamId === targetTeamId && !t.voided

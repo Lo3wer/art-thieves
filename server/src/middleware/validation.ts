@@ -34,6 +34,7 @@ export const createGameSchema = z.object({
     winThreshold: z.number().int().positive(),
     reTagCooldown: z.number().min(0),
     disputeWindow: z.number().positive(),
+    noTagPeriod: z.number().min(0),
   }),
 });
 
@@ -70,4 +71,5 @@ export const configUpdateSchema = z.object({
   winThreshold: z.number().int().positive().optional(),
   reTagCooldown: z.number().min(0).optional(),
   disputeWindow: z.number().positive().optional(),
+  noTagPeriod: z.number().min(0).optional(),
 });

@@ -207,8 +207,7 @@ function processTag(
   if (isTeamFrozen(gameId, taggerTeamId)) throw new Error('Your team is frozen');
 
   const startedAt = game.startedAt ? new Date(game.startedAt).getTime() : 0;
-  const noTagMs = 10 * 60 * 1000;
-  if (Date.now() - startedAt < noTagMs) throw new Error('Tagging is disabled for the first 10 minutes');
+  if (Date.now() - startedAt < game.config.noTagPeriod * 1000) throw new Error(`Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
   const recentTags = store.getTagsByGame(gameId).filter(
     (t) => t.taggerTeamId === taggerTeamId && t.targetTeamId === targetTeamId && !t.voided
