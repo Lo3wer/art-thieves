@@ -45,7 +45,11 @@ export default function AppNavigator() {
             <Tab.Screen name="Log" component={LogScreen} />
           </>
         ) : (
-          <Tab.Screen name="Lobby" component={LobbyScreen} />
+          <Tab.Screen
+            name="Lobby"
+            component={LobbyScreen}
+            options={{ tabBarStyle: { display: 'none' } }}
+          />
         )}
       </Tab.Navigator>
     </NavigationContainer>

@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { Map, Camera, Marker, UserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
+import { Map, Camera, Marker, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
+import { emitLocation } from '../services/socket';
 import type { Landmark, LandmarkState, LocationPing } from '../types';
 
 const MINIMAL_MAP_STYLE: any = {
@@ -55,6 +56,7 @@ export default function MapScreen() {
         { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 5000 },
         (loc) => {
           setOwnLocation(loc.coords.latitude, loc.coords.longitude);
+          emitLocation(loc.coords.latitude, loc.coords.longitude);
         }
       );
     })();
@@ -154,8 +156,6 @@ export default function MapScreen() {
             zoom: 14,
           }}
         />
-
-        <UserLocation />
 
         <GeoJSONSource
           id="boundary-source"
