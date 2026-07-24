@@ -4,21 +4,23 @@
 
 ---
 
-## Development Approach
+## Development Order
 
-Every feature phase follows a **frontend-first pattern** with three sub-phases:
+1. **Part 1 — Full App (client with mocks):** Build every screen, component, store, and navigation. A mock service layer simulates all server responses so the entire app is navigable and testable without a backend.
+2. **Part 2 — Server Business Logic (in-memory):** Build the entire Express + Socket.IO server with an in-memory data store. Same behaviour as the final system, but no database dependency. The client switches from mocks to the real server.
+3. **Part 3 — Database Integration:** Replace the in-memory store with PostgreSQL. Add migrations, connection pooling, and schema queries. Everything else stays the same.
 
-- **A — Client (with mocks):** Build all screens, components, stores, and navigation against a mock service layer. Mocks use the same TypeScript types as the real services, so switching later is a drop-in replacement.
-- **B — Server (real implementation):** Build the actual backend endpoints, database queries, and Socket.IO event handlers.
-- **C — Integration:** Wire the client's service layer to the real server, remove mock implementations, end-to-end verification.
-
-The mock layer lives in `app/src/services/__mocks__/` and exposes the same interface as the real services. For Socket.IO, a mock socket emits local events to simulate server responses for testing.
+Verification steps at each part ensure you're never debugging client + server + DB at the same time.
 
 ---
 
-## Phase 1 — Project Foundation & Infrastructure
+## Part 1 — Client App (full implementation with mocks)
 
-### 1A — Client Scaffold
+### Goal: A fully functional app that works end-to-end using mock services.
+
+---
+
+### 1.1 — Project Scaffold & Navigation
 
 - Reorganize `app/` into feature-based structure:
   ```
@@ -27,461 +29,413 @@ The mock layer lives in `app/src/services/__mocks__/` and exposes the same inter
   ├── src/
   │   ├── navigation/
   │   │   └── AppNavigator.tsx
-  │   ├── screens/           # One file per screen
-  │   ├── components/        # Shared/reusable components
+  │   ├── screens/           # Screen files
+  │   ├── components/        # Shared components
   │   ├── stores/            # Zustand stores
-  │   ├── services/          # API client, Socket.IO client + mocks
+  │   ├── services/          # API, Socket.IO, mocks
   │   ├── hooks/             # Custom hooks
   │   ├── types/             # Shared TypeScript types
-  │   └── utils/             # Helpers (distance calc, etc.)
+  │   └── utils/             # Helpers (distance, timers, etc.)
   ```
-- Add dependencies: `@react-navigation/native`, `@react-navigation/bottom-tabs`, `@react-navigation/native-stack`, `react-native-screens`, `react-native-safe-area-context`, `zustand`, `socket.io-client`, `react-native-maps`, `expo-camera`, `expo-location`, `expo-document-picker`, `expo-file-system`
+- Add all dependencies:
+  - Navigation: `@react-navigation/native`, `@react-navigation/bottom-tabs`, `@react-navigation/native-stack`, `react-native-screens`, `react-native-safe-area-context`
+  - State: `zustand`
+  - Network: `socket.io-client`
+  - Maps: `react-native-maps`
+   - Device: `expo-camera`, `expo-location`, `expo-document-picker`, `expo-file-system`, `expo-notifications`
 - Add dev deps: `jest`, `@testing-library/react-native`, `@testing-library/jest-native`
-- Bottom-tab navigator with 6 placeholder tabs: Game, Map, Claim, Tag, Log, Lobby
-- Zustand store scaffold: `useGameStore`, `useLocationStore`, `useAuthStore`
-- Define shared TypeScript types: `Game`, `Team`, `Landmark`, `Map`, `GameConfig`, `TagEvent`, `LogEntry` — used by both real and mock services
+- Define shared types: `Game`, `Team`, `Landmark`, `GameMap`, `GameConfig`, `TagEvent`, `LogEntry`
+- Bottom-tab navigator with 6 tabs: Lobby, Game, Map, Claim, Tag, Log
+- Navigation guard: if no active game, show Lobby tab; if game active, show the other 5 tabs (Lobby hidden)
+- Zustand store scaffold: `useGameStore`, `useLocationStore`, `useTeamStore`, `useLobbyStore`
+- Notification service scaffold: `services/notifications.ts` — push token registration via `expo-notifications`, permission request, handler for incoming notifications (deep link to relevant tab). Mock version records displayed notifications locally.
 
 **Verify:**
 - App builds and launches on Expo Go
-- Tab navigation renders with 6 tabs with placeholder content
+- Tab navigation renders correctly (Lobby when no game; game tabs when active)
 - Zustand stores importable with initial state
+- Notification permission prompt fires on first launch
 - Jest placeholder test passes
 
-### 1B — Server Scaffold
+---
 
-- Reorganize `server/src/` into layered structure:
+### 1.2 — Map Tab
+
+- `react-native-maps` centered on map center from store
+- Boundary polygon as translucent overlay (render helper in `MapUtils.ts`)
+- Landmark markers colored by status:
+  - Grey = unclaimed
+  - Team color = claimed
+  - Team color + lock icon + partial opacity = locked
+- Landmark marker onPress → bottom detail panel:
+  - Name, image, status text
+  - **Claim** button (visible/enabled only when own GPS within vicinity radius)
+- Live team location markers (colors match team colors)
+- `expo-location` GPS permission request + periodic pings into `useLocationStore`
+- Mock data: Vancouver GeoJSON fixture (40 landmarks + boundary) loaded into store on mount; mock team positions near a few landmarks
+- Mock service updates marker colors when claim/challenge events fire locally
+
+**Verify:**
+- Map renders with 40 markers from the Vancouver fixture
+- Boundary polygon renders
+- Tapping a marker opens detail panel with correct info
+- Claim button shows/hides based on vicinity (use a mock GPS position)
+- Team location markers display at mock positions
+- Markers don't overlap excessively (adjust viewport)
+
+---
+
+### 1.3 — Lobby Screens
+
+- **HostCreateScreen:**
+  - Step 1: Select map — list available maps (default Vancouver + any "previously imported" from mock)
+  - Step 2: **Import Map** — `expo-document-picker` for `.geojson`/`.json` → read via `expo-file-system` → validate shape client-side → add to mock map list
+  - Step 3: Settings form (duration, vicinity radius, win threshold, cooldowns) → preview landmarks → **Start Game**
+- **JoinScreen:** enter join code → choose team name + color → waiting room
+- **LobbyScreen:** game code display, team roster, Start button (host only)
+- Mock service: `services/__mocks__/api.ts` provides canned responses for all lobby calls (create game returns fake join code, join returns team info, start transitions status)
+- `services/api.ts`: typed interface — `fetchMaps`, `importMap`, `createGame`, `joinGame`, `startGame`. Mock impl behind a flag.
+
+**Verify:**
+- Host sees default Vancouver + any imported maps in selector
+- Import Map → file picker → valid file → appears in list
+- Malformed file → error message
+- Create game → join code displayed
+- Second device joins → appears in roster
+- Start → lobby hidden, game tabs shown
+
+---
+
+### 1.4 — Claim Screen
+
+- Active only when GPS within a landmark's vicinity (check `useLocationStore` distance to nearest landmark); otherwise show "Move closer to a landmark"
+- Shows landmark info (name, image)
+- **Claim flow:**
+  - `expo-camera` opens → take selfie → preview → confirm/retake
+  - On confirm: mock API succeeds → update marker color in store
+  - If stealing: show "You will steal this Landmark from {team}" confirmation modal
+- **Challenge flow** (after successful claim):
+  - Display challenge text
+  - 3 buttons: **Complete** / **Fail** / **Veto**
+  - Complete → lock icon shown; Fail/Veto → stays claimed
+  - If already locked or team already attempted: show "Challenge Unavailable"
+- Mock service: `services/__mocks__/api.ts` tracks claim/challenge state in-memory per game
+- Mock notifications: when a claim/steal succeeds on a rival's landmark, fire a local notification preview simulating what the pushed team would receive ("{team} claimed {Landmark}" / "{team} stole {Landmark} from you")
+
+**Verify:**
+- Within vicinity → Claim tab activates with correct landmark
+- Camera opens, selfie preview works, confirm processes
+- Steal confirmation modal appears for rival's landmark
+- Challenge buttons update state correctly
+- "Challenge Unavailable" when appropriate
+- Local notification fires when claiming a rival's landmark
+
+---
+
+### 1.5 — Tag Screen
+
+- **Tag flow:**
+  - If frozen: show freeze countdown timer, disable all actions
+  - If not frozen: **Tag** button → team selector modal → confirm → send tag
+  - Block tag button during no-tag period (show countdown to unlock)
+- **Dispute flow** (when recently tagged):
+  - **Dispute** button + countdown
+  - Confirm → tag voided, unfrozen immediately
+  - Window lapses → "Tag Confirmed" + freeze proceeds
+- Freeze overlay: blocks all interactions app-wide (claim, challenge, tag)
+- Re-tag cooldown display
+- Mock service: tracks no-tag period, freeze state, cooldowns in-memory
+- Mock notifications: simulate tag notifications locally — "You've been tagged by {team}!" when targeted, "Your tag on {team} was disputed/confirmed" when tag resolves
+
+**Verify:**
+- No-tag period: tag button shows timer, disabled
+- After no-tag period: tag button works → target frozen
+- Frozen team sees overlay across all tabs
+- Dispute within window → voided immediately
+- Window lapses → freeze continues
+- Re-tag cooldown enforced for same team
+- Local notification fires on tag receive and dispute resolution
+
+---
+
+### 1.6 — Game Tab & Log Tab
+
+- **GameScreen:**
+  - Live scoreboard: teams ranked by claimed count, then locked count
+  - Game clock countdown
+  - Host-only: Pause / Resume / End Game buttons
+  - Pause overlay: "Game Paused" banner across all screens
+- **LogScreen:**
+  - Chronological event FlatList (claim, steal, lock, challenge fail/veto, tag, dispute, pause/resume, game start/end)
+  - Filter dropdown by team
+  - Real-time new entries via mock socket events
+- Mock scoreboard updates on claim/challenge events; mock clock ticks
+- Mock notifications: local notification on pause/resume/end for non-host players
+
+**Verify:**
+- Scoreboard shows correct ranking, updates on claim events
+- Clock counts down
+- Host buttons visible for host, hidden for non-hosts
+- Pause overlay shows when paused
+- Log shows events, filter narrows by team
+- Local notification fires on pause/resume/end for non-host devices
+
+---
+
+### 1.7 — Reconnection & Edge Cases (client-side)
+
+- **Action queue:** `services/actionQueue.ts` — cache outgoing actions to AsyncStorage when offline
+- Mock socket has `simulateDisconnect()` for testing offline behaviour
+- On reconnect: flush queue in order, show pending indicator
+- Zustand stores persist critical state (gameId, teamId) to AsyncStorage
+- App launch → check AsyncStorage → attempt reconnect to active game
+
+**Verify:**
+- Mock disconnect → queue actions → reconnect → actions flushed
+- App restart → reconnects to game
+- State consistent after reconnect
+
+---
+
+### 1.8 — Client Tests
+
+- **Component:** MapScreen markers, GameScreen scoreboard, TagScreen freeze overlay
+- **Store:** Zustand transitions on all event types
+- **Service:** API client (mock), action queue, socket event registration, notification token registration
+- **Navigation:** tab switching, lobby→game conditional flow, notification deep linking (tap notification → opens correct tab)
+- **Integration (mocked):** Full game walkthrough — lobby → map → claim → challenge → tag → scoreboard → log → game end, with local notifications at each trigger point
+
+**Verify:**
+- `npm test` passes in `app/`
+- Manual walkthrough of all screens on device with mock data
+
+---
+
+## Part 2 — Server Business Logic (in-memory)
+
+### Goal: Full server with REST + Socket.IO + game logic, backed by in-memory storage. Client switches from mocks to real server.
+
+---
+
+### 2.1 — Server Scaffold
+
+- `server/` structure:
   ```
   server/src/
   ├── index.ts              # Entry point (Express + Socket.IO bootstrap)
-  ├── config/
-  │   └── db.ts             # PostgreSQL pool/client setup
-  ├── db/
-  │   └── migrations/       # SQL migration files
-  ├── models/               # Data access layer (SQL queries)
+  ├── data/
+  │   └── store.ts          # In-memory data store (maps, games, teams, landmarks, state, events)
   ├── routes/               # REST route definitions
-  ├── middleware/            # Auth, error handling, validation (zod)
+  ├── middleware/            # Zod validation, error handling
   ├── socket/               # Socket.IO event handlers
   └── game/
       └── logic.ts          # Pure game-logic functions
   ```
-- Add dependencies: `pg`, `socket.io`, `uuid`, `dotenv`, `zod`
-- Add dev deps: `jest`, `ts-jest`, `supertest`, `@types/jest`, `@types/supertest`
-- Write migration: `001_create_tables.sql`
-  - `maps` — id (uuid), name, center_lat, center_lng, default_zoom, default_vicinity_radius, win_threshold, data (jsonb — GeoJSON FeatureCollection), created_at
-  - `games` — id (uuid), join_code (unique), map_id (fk nullable), status (lobby/active/paused/ended), config (jsonb: duration, vicinity_radius, win_threshold, re_tag_cooldown, dispute_window), created_at
-  - `teams` — id (uuid), game_id (fk), name, color, created_at
-  - `landmarks` — id (uuid), game_id (fk), name, latitude, longitude, image_url, challenge_text, map_landmark_index (int)
-  - `landmark_state` — id (uuid), game_id (fk), landmark_id (fk), team_id (fk nullable), locked (boolean), claimed_at
-  - `challenge_attempts` — id (uuid), game_id (fk), landmark_id (fk), team_id (fk), outcome, created_at
-  - `location_pings` — id (uuid), game_id (fk), team_id (fk), latitude, longitude, timestamp
-  - `tag_events` — id (uuid), game_id (fk), tagger_team_id (fk), target_team_id (fk), timestamp, disputed, voided
-  - `event_log` — id (uuid), game_id (fk), type, data (jsonb), timestamp
-- Run migrations on startup
-- `.env` config: `DATABASE_URL`, `PORT`
-- Seed script: insert bundled Vancouver Downtown map into `maps` table (40 landmarks as GeoJSON FeatureCollection)
+- Dependencies: `express`, `cors`, `socket.io`, `uuid`, `zod`
+- Dev deps: `tsx`, `typescript`, `jest`, `ts-jest`, `supertest`, `@types/*`
+- In-memory store: plain objects/arrays implementing the same interface that the DB layer will later use
+- Seed the default Vancouver map on first request (or on startup)
 
 **Verify:**
-- Server starts and connects to PostgreSQL
-- All tables created (`\dt`)
-- Seed script inserts 40 landmarks
-- Jest placeholder test passes
+- Server starts on port 3001
+- In-memory store seeded with Vancouver map
+- Jest placeholder passes
 
 ---
 
-## Phase 2 — Lobby System (Pre-game)
+### 2.2 — Lobby REST Endpoints
 
-### 2A — Client Lobby Screens (with mocks)
+- `POST /api/maps` — Import map (validate zod schema, store in-memory)
+- `GET /api/maps` — List all maps (metadata only)
+- `GET /api/maps/:mapId` — Get full map data
+- `POST /api/games` — Create game with mapId, snapshot landmarks, return game + join_code
+- `POST /api/games/:joinCode/join` — Join game, return team info
+- `GET /api/games/:gameId` — Fetch game state
+- `PUT /api/games/:gameId/config` — Update settings
+- `PUT /api/games/:gameId/landmarks` — Edit landmarks
+- `POST /api/games/:gameId/start` — Start game
+- `POST /api/games/:gameId/push-token` — Register device push token for a team (associates Expo push token with team+game for targeted notifications)
 
-- **Mock service layer:**
-  - `services/__mocks__/api.ts` — returns canned responses for game create/join, map list/upload
-  - Mock map list includes: default Vancouver map + one fake imported map
-  - Mock game create returns a fake join code; mock join returns team info
-- **HostCreateScreen:**
-  - Step 1: Choose map — lists available maps from mock API (name, landmark count, city)
-  - Step 2 (optional): **Import Map** — file picker (`expo-document-picker`) → read file → validate shape client-side → POST to mock API → add to list
-  - Step 3: Settings form (duration, vicinity radius, win threshold, cooldowns) → optionally preview/edit landmarks → Start Game
-- **JoinScreen:** enter code → choose team name + color → waiting room
-- **LobbyScreen:** game code display, roster, host controls (Start button for host only)
-- **API service module** (`services/api.ts`): typed functions — `fetchMaps`, `importMap`, `createGame`, `joinGame`, `startGame`. Uses a flag to switch between mock and real implementations.
-- Zustand store wired to lobby state
-
-**Verify:**
-- Host sees default Vancouver map + fake imported map in selector
-- Host taps Import Map → file picker opens → selects a `.geojson` file → map appears in list
-- Malformed file → error message, not added
-- Host creates game → join code displayed
-- Second device joins with code → appears in roster
-- Host starts game → status transitions to `active` in store
-
-### 2B — Server Lobby REST API
-
-- `POST /api/maps` — Import a map (accept GeoJSON as JSON body, validate schema with zod, return map_id). Persist to `maps` table.
-- `GET /api/maps` — List all available maps (metadata only, no full GeoJSON). Includes Vancouver default + user-imported.
-- `GET /api/maps/:mapId` — Get full map data (GeoJSON + metadata) for preview.
-- `POST /api/games` — Create game, accept `mapId`, snapshot landmarks from map into `landmarks` table, return game + join_code.
-- `POST /api/games/:joinCode/join` — Team joins, return game + team info.
-- `GET /api/games/:gameId` — Fetch game state (used for reconnection).
-- `PUT /api/games/:gameId/config` — Host updates settings.
-- `PUT /api/games/:gameId/landmarks` — Host edits landmarks before start.
-- `POST /api/games/:gameId/start` — Host starts game (set status to `active`).
-- Zod validation for map schema, error-handling middleware.
-
-**Verify:**
-- `POST /api/maps` with valid GeoJSON → 201 + map_id returned
-- `POST /api/maps` with missing fields → 400 with descriptive error
-- `GET /api/maps` returns Vancouver default + imported maps
-- `POST /api/games` with mapId → game created with landmarks snapshot
-- `POST /api/games/:joinCode/join` → team added, game returned
-- `POST /api/games/:gameId/start` → status changes to `active`
-
-### 2C — Lobby Integration
-
-- Switch client `services/api.ts` from mock to real server URL
-- Full flow: Host launches app → creates game → imports map → starts → team joins from separate device
-- Remove mock API responses for lobby endpoints (keep other endpoint mocks for later phases)
-
-**Verify:**
-- Lobby flow works end-to-end with real server
-- Map import → server validates → persisted → visible on reload
-- Game create/join/start all round-trip correctly
+**Verify with** `supertest`**:** each endpoint returns correct status + body; rejects invalid input
 
 ---
 
-## Phase 3 — Core Game State & WebSocket Layer
+### 2.3 — Socket.IO Setup
 
-### 3A — Client Socket Service & State Sync (with mocks)
-
-- **Mock socket service:** `services/__mocks__/socket.ts` — exposes `connect`, `disconnect`, `emit`, `on`, `off`. Internally uses a local event emitter. Provides helper methods like `simulateEvent(type, data)` for tests and manual dev to trigger server-like events without a server.
-- **Real socket service scaffold:** `services/socket.ts` — connect/disconnect, event registration, reconnect logic (will connect to real server in 3C).
-- Zustand stores updated by socket events:
-  - `useGameStore` — game state, scores, clock, pause state
-  - `useLocationStore` — all teams' current positions
-  - `useTeamStore` — team info, freeze status, dispute availability
-- Action queue: cache outgoing actions in AsyncStorage when offline, flush on reconnect
-- Store tests: feed mock socket events → assert Zustand state transitions
+- Socket.IO on Express, namespace `/game`
+- Rooms: socket joins game room on `join_game`
+- Client→Server events: `location_update`, `claim_landmark`, `steal_landmark`, `complete_challenge`, `fail_challenge`, `veto_challenge`, `tag_team`, `dispute_tag`, `pause_game`, `resume_game`, `end_game`
+- Server→Client events: `state_update`, `location_broadcast`, `game_ended`, `game_paused`, `game_resumed`
+- `game_state_sync` on reconnect (full state snapshot from in-memory store)
+- Idempotency by client action ID
+- Push notification integration: socket event handlers also trigger Expo Push API calls for tag, claim/steal, and pause/resume/end events (see 2.4)
 
 **Verify:**
-- Mock socket can connect and simulate events
-- Dispatching a mock `state_update` event updates Zustand store
-- Dispatching a mock `location_broadcast` updates team positions
-- Dispatching a mock `tag_frozen` updates freeze state
-- Action queue persists to AsyncStorage and flushes correctly
-
-### 3B — Server Socket.IO Setup
-
-- Initialize Socket.IO attached to Express, namespace `/game`
-- Client→server events: `join_game`, `location_update`, `claim_landmark`, `steal_landmark`, `complete_challenge`, `fail_challenge`, `veto_challenge`, `tag_team`, `dispute_tag`, `pause_game`, `resume_game`, `end_game`
-- Server→client events: `game_state_sync`, `state_update`, `location_broadcast`, `tag_frozen`, `tag_dispute_window`, `tag_voided`, `game_paused`, `game_resumed`, `game_ended`
-- Room management: socket joins game-specific room on `join_game`, leaves on disconnect
-- Reconnection: track socket→game+team mapping; on reconnect send `game_state_sync` with current state
-- Idempotency: deduplicate actions by client-generated action ID
-
-**Verify:**
-- Client connects to Socket.IO server and joins game room
-- Two clients in same room: one emits `location_update` → other receives `location_broadcast`
-- Disconnect one client → reconnect → receives `game_state_sync`
-- Multiple rooms don't cross-talk
-
-### 3C — Socket Integration
-
-- Switch client `services/socket.ts` from mock to real Socket.IO connection
-- WebSocket lobby sync: when host starts game in Phase 2, socket broadcasts to all connected clients
-
-**Verify:**
-- Client connects to real server socket
-- Location pings flow from client → server → broadcast to room
-- Reconnect cycle works with real server
-- All planned events round-trip correctly
+- Connect → join room → events flow between clients in same room
+- Reconnect → receives `game_state_sync`
 
 ---
 
-## Phase 4 — Map Tab
+### 2.4 — Game Logic
 
-### 4A — Client Map Screen (with mocks)
-
-- **Mock data:** Provide hardcoded Vancouver GeoJSON fixture (40 landmarks + boundary polygon) from the client, simulating the API response that will come from the server.
-- **Mock location:** Simulate 4-5 fake GPS positions near the landmarks so the map isn't empty during dev.
-- **MapScreen:**
-  - `react-native-maps` centered on map's `center` coordinates, zoomed to `defaultZoom`
-  - Boundary polygon rendered as translucent overlay
-  - Landmark markers colored by status (grey / team color / team color + lock icon)
-  - Live team location markers (from Zustand `useLocationStore`, initially seeded by mock)
-  - Bottom detail panel on marker tap: name, image, status text, **Claim** button (visible only when GPS within vicinity radius)
-- **Location tracking:** `expo-location` GPS permission request, periodic pings into store (and to socket when integrated)
-- **Boundary polygon rendering** helper in `MapUtils.ts`
-
-**Verify:**
-- Map renders with all 40 landmark markers from the Vancouver fixture
-- Boundary polygon renders as overlay
-- Map centers on Vancouver coordinates
-- Tapping a landmark opens detail panel with correct info
-- Claim button shows/hides based on whether GPS (or mock GPS) is within 30m
-- Team location markers show at mock positions
-
-### 4B — Server Landmark Endpoints & Vicinity
-
-- `GET /api/games/:gameId/landmarks` — returns landmarks + map metadata (center, default zoom)
-- `GET /api/games/:gameId/map` — returns the full GeoJSON data for rendering boundary polygon
-- Haversine distance utility in `game/logic.ts`
-- Vicinity check enforced server-side on all claim/challenge actions (reject if outside radius)
+- **Claim/Steal:**
+  - Validate vicinity (haversine), frozen state, game active
+  - If unclaimed → assign; if other team's → steal; reject own duplicate
+  - Emit `state_update`
+- **Challenge:**
+  - Validate vicinity, one attempt per team, not locked
+  - Complete → lock; Fail/Veto → record attempt
+  - Emit `state_update`
+- **Win check:** after every claim/challenge, count claimed landmarks per team. If `>= winThreshold` → emit `game_ended`
+- **Tag/Dispute:**
+  - Validate no-tag period, frozen state, cooldowns
+  - Create tag → frozen state → start dispute window timer
+  - Dispute within window → void, unfreeze
+  - Timers stored as remaining duration (pause-safe)
+- **Session control:** pause/resume toggle status, end computes winner
+- **Scoreboard:** computed from landmark_state
+- **Event log:** append-only array of all mutations
+- **Push notifications:**
+  - Add `expo-notifications` server dependency (`expo-server-sdk` or fetch Expo Push API directly)
+  - `services/notifications.ts`: helper to send push notifications via Expo Push API. Batches per-team tokens for efficiency. Handles invalid tokens (remove from store on 410/InvalidCredentials response).
+  - Notification triggers:
+    - **Tag received**: when a tag is created, send push to all devices on the target team ("You've been tagged by {team}! {disputeWindow}s to dispute.")
+    - **Tag disputed/confirmed**: when a dispute is processed or window lapses, notify the tagging team.
+    - **Claim/Steal**: when a landmark changes hands, notify all devices on the losing team ("{team} claimed {Landmark}" / "{team} stole {Landmark} from you").
+    - **Game paused/resumed/ended**: when session control actions fire, notify all devices in the game.
 
 **Verify:**
-- `GET /api/games/:gameId/landmarks` returns correct landmarks for the game
-- Haversine returns correct distances (compare against known coordinate pairs)
-- Vicinity check correctly allows/rejects based on radius
-
-### 4C — Map Integration
-
-- Wire `MapScreen` to real API endpoints for landmark/map data
-- Wire location pings to real socket `location_update` event
-- Team location markers now show real GPS positions from all connected clients
-
-**Verify:**
-- Landmark positions match real server data
-- Boundary polygon renders from server GeoJSON
-- Own GPS position appears and updates
-- Other team members' positions visible after they join
+- All game rules enforced correctly (unit tests on `game/logic.ts`)
+- Full game scenario: create → join → claim → steal → challenge → lock → tag → dispute → pause → resume → end
+- Edge cases: frozen reject, locked reject, out-of-vicinity reject, no-tag period reject, instant win at threshold, tiebreaker
+- Push notification sent to correct team devices on each trigger event
+- Invalid push tokens detected and cleaned up
 
 ---
 
-## Phase 5 — Claim & Challenge System
+### 2.5 — Integration (Client → Real Server)
 
-### 5A — Client Claim Screen (with mocks)
-
-- **Mock service:** `services/__mocks__/api.ts` responds to claim/challenge requests with success/failure based on simple in-memory state
-- **ClaimScreen:**
-  - Active only when GPS within a landmark's vicinity; otherwise show "Move closer to a landmark"
-  - Shows landmark info (name, image)
-  - **Camera flow:** `expo-camera` → take selfie → preview → confirm/retake
-  - On confirm: POST claim → mock succeeds → update local landmark color
-  - If landmark owned by other team: show "You will steal this Landmark from {team}" modal before confirming
-  - **Challenge flow:** after successful claim, show challenge text + 3 buttons (Complete / Fail / Veto)
-  - On challenge complete: show lock icon; on fail/veto: stays claimed
-  - "Challenge Unavailable" if already attempted or locked
-- Mock socket simulates `state_update` events so the Map tab colors update in response to claims
+- Switch `services/api.ts` from mock to real server URL
+- Switch `services/socket.ts` from mock to real socket connection
+- Remove all mock implementations for game-related services
 
 **Verify:**
-- Walk within 30m of a landmark → Claim tab activates with correct landmark info
-- Camera opens, takes photo, preview works, confirm processes claim
-- Claim on rival's landmark → steal confirmation modal → claim transfers ownership
-- Challenge buttons fire and update state correctly in store
-- "Challenge Unavailable" when already attempted
-
-### 5B — Server Claim & Challenge Logic
-
-- `POST /api/games/:gameId/claim`:
-  - Validate: game active, team not frozen, within vicinity, landmark exists
-  - If unclaimed → assign to team
-  - If claimed by other → transfer (steal)
-  - Cannot claim own already-claimed landmark
-- `POST /api/games/:gameId/challenge`:
-  - Validate: within vicinity, one attempt per team per landmark, not already locked
-  - Complete → set `landmark_state.locked = true`
-  - Fail/Veto → record attempt, landmark stays unlocked
-- Win check after every mutation: `count >= game.config.winThreshold` → emit `game_ended` with winner
-- Log all events to `event_log`
-- Emit `state_update` via socket to game room after every mutation
-
-**Verify:**
-- Claim unclaimed landmark → assigned to team, socket broadcasts update
-- Steal from rival → ownership transfers, event logged
-- Complete challenge → landmark locked, cannot be stolen
-- Fail/Veto → landmark stays unlocked, no further attempts allowed for that team
-- Attempt on locked landmark → rejected
-- Frozen team claim → rejected
-- Claim outside vicinity → rejected
-- 20th claim (or threshold) → game ends immediately
-
-### 5C — Claim Integration
-
-- Swap client claim/challenge from mock to real API + socket
-- End-to-end: claim flows through camera → API → server → socket broadcast → other clients see update
-
-**Verify:**
-- Full claim/steal/lock flow works end-to-end across multiple devices
-- Win condition triggers on threshold
-- Event log entries created on server
+- Full end-to-end flow on device: lobby → create game → join → map → claim → challenge → tag → scoreboard → log → end
+- Multiple devices interact in the same game
+- Disconnect/reconnect cycle works
 
 ---
 
-## Phase 6 — Tag System
+### 2.6 — Server Tests
 
-### 6A — Client Tag Screen (with mocks)
-
-- **Mock service:** mock API validates tag rules locally (no-tag period, freeze state, cooldowns) using in-memory state
-- **TagScreen:**
-  - If frozen: show freeze countdown timer, disable all action buttons (app-wide freeze overlay)
-  - If not frozen: **Tag** button → team selector modal → confirm → send tag
-  - Block tag button during no-tag period (show countdown to unlock)
-  - **Dispute flow:** if recently tagged and within window → **Dispute** button + countdown → confirm → void
-  - If window lapsed → show "Tag Confirmed" + freeze timer
-  - Freeze overlay: blocks all claim/challenge/tag interactions app-wide
-  - Re-tag cooldown display
-- Mock socket simulates `tag_frozen`, `tag_dispute_window`, `tag_voided` events
+- **Unit:** game logic (win condition, vicinity, tiebreaker, timer math)
+- **Integration:** all REST endpoints via supertest
+- **Socket:** connect/disconnect, room events, reconnection
+- **Edge cases:** frozen rejects claim, locked rejects steal, tag during no-tag period, cooldown enforcement, idempotent actions, map validation, instant win, tiebreaker
+- **Notification tests:** push notification helper correctly formats and batches messages; invalid tokens are removed from store
 
 **Verify:**
-- First 10 min: Tag button shows "Tagging unavailable" with timer
-- After 10 min: tag works → target shows frozen state
-- Frozen team sees freeze overlay across all tabs
-- Dispute within window → voided immediately
-- Window lapses → freeze continues
-- Same team re-tag blocked for 5 min cooldown
-
-### 6B — Server Tag Logic
-
-- `POST /api/games/:gameId/tag`:
-  - Validate: game active, tagger not frozen, no-tag period elapsed, re-tag cooldown inactive
-  - Create tag event, emit `tag_frozen` to target, start 60s dispute window
-- `POST /api/games/:gameId/dispute`:
-  - Validate: within dispute window, caller is the target
-  - Set disputed + voided on tag record, emit `tag_voided` → target unfrozen immediately
-- `POST /api/games/:gameId/acknowledge-tag` — target lets window lapse → tag confirmed
-- Timer management: freeze end, re-tag cooldown (per tagger-target pair). Pause freezes all timers (store as remaining duration)
-- Frozen state enforced server-side: reject claim/challenge/tag actions
-- No-tag period enforced for first 10 min of game clock
-
-**Verify:**
-- Tag within no-tag period → rejected
-- Tag creates freeze on target → socket event sent
-- Dispute within window → voided, unfrozen
-- Dispute after window → rejected
-- Frozen team actions rejected
-- Pause freezes timers, resume continues from correct remaining time
-- Re-tag cooldown enforced
-
-### 6C — Tag Integration
-
-- Swap client tag from mock to real API + socket
-- End-to-end: tag from device A → freeze on device B → dispute from B → void confirmed on A
-
-**Verify:**
-- Full tag/dispute flow works across multiple devices
-- Freeze overlay correctly blocks claim/challenge/tag
-- Timers sync correctly across all devices
+- `npm test` passes in `server/`
 
 ---
 
-## Phase 7 — Game Tab & Log Tab
+## Part 3 — Database Integration
 
-### 7A — Client Game & Log Screens (with mocks)
-
-- **Mock data:** mock scoreboard (fake rankings that update periodically), mock event log (canned entries)
-- **GameScreen:**
-  - Live scoreboard: teams ranked by claimed count, then locked count (updates via mock socket events)
-  - Game clock countdown (synced with server via socket, but mocked initially)
-  - Host-only: Pause / Resume / End Game buttons
-  - Pause overlay: when game paused, show "Game Paused" banner across all screens
-- **LogScreen:**
-  - Chronological event FlatList
-  - Filter dropdown by team
-  - New entries appear at bottom as mock socket events arrive
-- Mock socket simulates scoreboard updates, pause/resume, log entries
-
-**Verify:**
-- Scoreboard shows correct ranking
-- Clock counts down
-- Host buttons visible for host role, hidden for non-hosts
-- Pause overlay shows when game is paused
-- Log shows events, filter narrows by team
-
-### 7B — Server Scoreboard, Log & Session Control
-
-- `GET /api/games/:gameId/scoreboard` — teams sorted by claimed count, then locked count
-- `GET /api/games/:gameId/log` — paginated event log, filterable by team
-- `PUT /api/games/:gameId/pause` — set status to paused, emit `game_paused`, freeze clock
-- `PUT /api/games/:gameId/resume` — set status to active, emit `game_resumed`, resume clock
-- `PUT /api/games/:gameId/end` — set status to ended, emit `game_ended`, compute winner
-- Server-side game clock: track `started_at` + accumulated `paused_duration` for accurate remaining time
-- On game end: compute winner (most claimed → most locked → tie)
-
-**Verify:**
-- Scoreboard endpoint returns correct rankings
-- Log endpoint paginates and filters correctly
-- Pause/resume toggles game status, clock stops/restarts
-- End computes winner correctly (normal case, tiebreaker, tie)
-
-### 7C — Game & Log Integration
-
-- Wire GameScreen and LogScreen to real server API + socket events
-- Remove mock scoreboard/log data
-
-**Verify:**
-- Scoreboard updates in real-time from server events
-- Clock reflects accurate server-side time, including pause/resume
-- Host controls work across all connected devices
-- Log shows all events from the game with correct timestamps
+### Goal: Replace in-memory store with PostgreSQL. No behavioural changes — everything that worked in Part 2 still works.
 
 ---
 
-## Phase 8 — Reconnection & Edge Cases
+### 3.1 — Database Setup
 
-### 8A — Client Offline Resilience (with simulated disconnect)
+- Add dependencies: `pg`
+- Add `config/db.ts`: PostgreSQL pool creation from `DATABASE_URL`
+- Create migration files (run on startup):
+  ```sql
+  -- 001_create_tables.sql
+  CREATE TABLE maps (
+    id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    center_lat DOUBLE PRECISION NOT NULL,
+    center_lng DOUBLE PRECISION NOT NULL,
+    default_zoom INT NOT NULL,
+    default_vicinity_radius INT NOT NULL,
+    win_threshold INT NOT NULL DEFAULT 20,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 
-- **Action queue:** `services/actionQueue.ts` — caches outgoing actions (claim, challenge, tag, dispute) to AsyncStorage when socket is disconnected
-- **Mock socket disconnect:** add a `simulateDisconnect()` method to mock socket to test offline behavior
-- On reconnect: flush queue in order, show pending indicator for queued actions
-- Zustand stores persist critical state to AsyncStorage (gameId, teamId, last known landmark states)
-- On app launch: check AsyncStorage for active game → attempt reconnect
+  CREATE TABLE games ( ... );
+  CREATE TABLE teams ( ... );
+  CREATE TABLE landmarks ( ... );
+  CREATE TABLE landmark_state ( ... );
+  CREATE TABLE challenge_attempts ( ... );
+  CREATE TABLE location_pings ( ... );
+  CREATE TABLE tag_events ( ... );
+  CREATE TABLE push_tokens (
+    id UUID PRIMARY KEY,
+    game_id UUID NOT NULL REFERENCES games(id),
+    team_id UUID NOT NULL REFERENCES teams(id),
+    token TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(game_id, team_id, token)
+  );
+  CREATE TABLE event_log ( ... );
+  ```
+- Seed script: insert Vancouver Downtown map on first run
 
 **Verify:**
-- Mock disconnect → perform actions → reconnect → actions flushed in order
-- State persists across app restart → reconnects to same game
-
-### 8B — Server Backfill
-
-- Per-team state versioning (increment counter on each mutation)
-- On `join_game` from reconnecting client: send `game_state_sync` with full game config, clock state, all landmark states, team info + freeze statuses, scoreboard, recent log entries (last 100)
-- Idempotent processing: reject or deduplicate actions with already-processed client-generated action IDs
-
-**Verify:**
-- Reconnecting client receives full state snapshot
-- Duplicate action IDs ignored (no double-claims)
-
-### 8C — Reconnection Integration
-
-- Kill client connection → perform actions → reconnect → actions sent, state synced
-- App relaunch mid-game → reconnects and receives full state
-- Verify no data loss or inconsistencies
-
-**Verify:**
-- Full reconnect cycle works end-to-end
-- No duplicate processing of actions
-- All connected clients converge on same game state
+- Server connects to PostgreSQL
+- All tables created
+- Vancouver map seeded
 
 ---
 
-## Phase 9 — Testing & Polish
+### 3.2 — Replace In-Memory Store with DB Queries
 
-### 9A — Server Tests (Jest + supertest)
+- Create `src/models/` with query functions for each table:
+  - `MapModel` — insert, findAll, findById
+  - `GameModel` — create, findByJoinCode, findById, updateStatus, updateConfig
+  - `TeamModel` — create, findByGame
+  - `LandmarkModel` — bulkCreate (from map snapshot), findByGame
+  - `LandmarkStateModel` — upsert (claim, steal, lock), findByGame, findByTeam
+  - `ChallengeAttemptModel` — create, findByTeamAndLandmark
+  - `PushTokenModel` — register, findByGameAndTeam, remove (invalid token cleanup)
+  - `LocationPingModel` — create, findByGame
+  - `TagEventModel` — create, findActiveByTarget, updateDispute
+  - `EventLogModel` — insert, findByGame (paginated, filterable)
+- Models implement the same interface as the in-memory store, so route handlers and socket handlers don't change
+- Replace `data/store.ts` references with model calls
 
-- **Unit:** win condition calculation, vicinity check, tiebreaker logic, timer math
-- **Integration:** all REST endpoints (map import, game CRUD, join, start, claim, challenge, tag, dispute, pause/resume/end, scoreboard, log)
-- **Socket:** connect/disconnect, room join/leave, emit/receive round-trip, reconnection backfill
-- **Edge cases:** frozen rejects claim, locked rejects steal, tag during no-tag period, tag cooldown enforcement, idempotent actions, map validation rejects invalid GeoJSON, instant win at threshold, tiebreaker scenarios, pause freezes timers correctly
+**Verify:**
+- All endpoints still return correct results (run the same supertest suite)
+- All game logic unchanged (pure functions in `game/logic.ts` need no changes)
+- Data persists across server restart
 
-### 9B — Client Tests (Jest + RNTL)
+---
 
-- **Component:** MapScreen renders markers, GameScreen shows scoreboard, TagScreen shows freeze overlay
-- **Store:** Zustand state transitions on mock socket events for all event types
-- **Service:** API client functions (mock + real), action queue persistence and flush, socket event registration
-- **Navigation:** tab switching renders correct screens, lobby→game conditional flow
-- **Mock integration:** full game flow using mock services (lobby → map → claim → tag → scoreboard)
+### 3.3 — Location History & Query Performance
 
-### 9C — Polish
+- Add indexes: `location_pings(game_id, timestamp)`, `event_log(game_id, type)`, `landmark_state(game_id, landmark_id)`
+- Location pings now persisted to DB (was optional in-memory). This enables post-game route replay.
+- Verify query performance for 40 landmarks, 3 teams, 1000+ location pings
 
-- Loading states and error boundaries across all screens
-- GPS permission denied flow (show manual location entry fallback or instructional screen)
-- Camera permission denied flow (show explanation, link to settings)
-- Server disconnect banner with reconnection indicator
-- Marker clustering or viewport filtering for large maps (dynamic, based on landmark count)
-- Consistent color scheme: team colors, landmark status colors, UI accents
-- Adequate hit targets for markers and buttons on mobile
-- Graceful handling of empty states (no map loaded, no logs yet, no landmarks nearby)
+**Verify:**
+- Location history query works
+- Post-game route data available (no dedicated UI yet, but data exists)
+
+---
+
+### 3.4 — Final Test Pass
+
+- Run all server tests against PostgreSQL (test database, reset between runs)
+- Run all client tests (unchanged)
+- Full manual walkthrough on device
+- Verify data persists: start game → make claims → restart server → rejoin → state intact
 
 **Verify:**
 - `npm test` passes in both `app/` and `server/`
-- Full manual walkthrough on device: lobby → select map → play → navigate map → claim → challenge → tag → dispute → check scoreboard → check log → game ends
-- Edge cases: disconnect/reconnect mid-game, GPS permission denied, import invalid map file, tiebreaker win, instant win at threshold
+- Full game flow works with persistent storage
+- Server restart doesn't lose game state
 
 ---
 
@@ -489,16 +443,18 @@ The mock layer lives in `app/src/services/__mocks__/` and exposes the same inter
 
 | Decision | Choice |
 |---|---|
-| Database | PostgreSQL |
+| Database | PostgreSQL (added last via model layer) |
 | Client state | Zustand |
 | Real-time | Socket.IO |
 | Maps library | react-native-maps |
 | Map file format | GeoJSON FeatureCollection + metadata wrapper |
 | Map import | expo-document-picker + expo-file-system |
 | Camera | expo-camera |
+| Push notifications | expo-notifications (client) + Expo Push API (server) |
 | Server validation | zod |
 | Server testing | Jest + supertest + socket.io-client |
 | Client testing | Jest + @testing-library/react-native |
 | Mock strategy | Shared TypeScript interfaces, flag-gated real vs mock service layer |
+| In-memory → DB | Data access layer with swappable implementation (in-memory for Part 2, SQL for Part 3) |
 | Project structure | Feature-based (server: layered; client: screens/components/stores/services) |
 | TypeScript | Strict mode in both projects |

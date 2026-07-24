@@ -17,6 +17,7 @@ Three teams compete to claim the most public art installations ("Landmarks") acr
 - **Claim**: a team claims a Landmark by visiting it (within the vicinity radius) and taking a selfie in front of it.
 - **Steal**: visiting a Landmark already claimed by another team transfers the claim to the visiting team. The app must show a confirmation ("You will steal this Landmark from {team}") before finalizing.
 - **Lock**: completing a Landmark's challenge locks it — it can no longer be stolen. Failing or vetoing leaves it claimed but vulnerable to steal.
+- **Notifications**: when a team's landmark is claimed or stolen, all members of that team receive a push notification ("{team} claimed {Landmark}" / "{team} stole {Landmark} from you").
 - **Challenge attempts**: each team gets exactly one attempt (complete/fail/veto) per Landmark, tracked independently per team — a team that steals a Landmark gets its own fresh attempt regardless of the previous holder's outcome.
 - **Vicinity radius**: default 30m from a Landmark's coordinates, host-configurable at setup. Required to claim or attempt a challenge.
 
@@ -31,6 +32,7 @@ Three teams compete to claim the most public art installations ("Landmarks") acr
 - While frozen, a team cannot: move (in-game sense — no claim/challenge actions), claim Landmarks, attempt/complete/veto challenges, or tag other teams.
 - Freeze duration: 10 minutes.
 - **Dispute**: the tagged team sees a Dispute button for a short window after being tagged (default 60s). Pressing it auto-voids the tag immediately with no penalty to either side. Ignoring it means the tag stands.
+- **Notifications**: the tagged team receives a push notification ("You've been tagged by {team}"). The tagging team receives a push notification if their tag is disputed or confirmed.
 - **No-tag period**: first 10 minutes of the game, tagging is disabled entirely.
 - **Re-tag cooldown**: a team cannot be tagged again by the same team for 5 minutes after a freeze ends (default, host-configurable), to prevent tag-camping lockouts.
 - Multiple teams can be tagged in the same action only if each is tagged individually (one target per Tag press).
@@ -86,11 +88,27 @@ The app ships with a built-in Vancouver Downtown map (40 landmarks) that is prel
 ### 2.7 Game Session Control
 - A host creates a lobby and receives a join code; other devices join as teams (name + color).
 - Only the host can **Start / Pause / Resume / End** the game.
-- Pausing freezes the game clock, all freeze timers, and disables all game actions (claim, challenge, tag) app-wide until resumed. This covers breaks (e.g., lunch) without a dedicated rule.
+- Pausing freezes the game clock, all freeze timers, and disables all game actions (claim, challenge, tag) app-wide until resumed. This covers breaks (e.g., lunch) without a dedicated rule. All teams receive a push notification when the game is paused, resumed, or ended.
 - Host configures at setup: map (select from default or previously imported), game duration, vicinity radius, win threshold, re-tag cooldown, dispute window length, and optionally imports a custom map (see §2.6).
 
 ### 2.8 Communication
 - Opposing teams may communicate freely outside the app (no in-app restriction).
+
+### 2.9 Push Notifications
+
+Push notifications supplement real-time socket events for when the app is backgrounded or closed. They do not replace in-app state sync — socket events remain the source of truth for all game state.
+
+#### Notification Triggers
+- **Tag received**: the targeted team receives a notification ("You've been tagged by {team}! You have {disputeWindow}s to dispute.") with a deep link to the Tag tab.
+- **Tag disputed/confirmed**: the tagging team is notified when the target disputes or confirms the tag.
+- **Claim/Steal**: all members of a team receive a notification when one of their landmarks is claimed or stolen by another team.
+- **Game paused/resumed/ended**: all players receive a notification with the current game status.
+
+#### Delivery
+- Notifications use Expo Push Notifications (FCM on Android, APNs on iOS).
+- Each device registers its push token with the server during lobby join.
+- The server sends push notifications via the Expo Push API when the corresponding game event occurs.
+- Notifications are best-effort (no guarantees if the device is offline), but socket reconnection handles missed state on app reopen.
 
 ---
 
@@ -130,20 +148,21 @@ Tab-based navigation, consistent across teams' devices; host device additionally
 ### 3.6 "Log" Tab
 - Chronological, timestamped event feed: claims, steals, locks, failed/vetoed challenges, tags (including disputes/voids), pauses/resumes, game start/end.
 - Filterable by team.
-- No push notifications — teams must check Map/Log actively.
+- Push notifications supplement real-time socket events when the app is backgrounded (see §2.9).
 
 ---
 
 ## 4. Real-Time & Backend Architecture
 
-- **Client**: React Native app (single codebase, host and team roles differentiated by lobby role, not separate builds).
-- **Server**: Express.js REST API for setup/config/auth-lite (join codes) and a **WebSocket layer** for:
+- **Client**: React Native app (single codebase, host and team roles differentiated by lobby role, not separate builds). Uses `expo-notifications` for push notification registration and handling.
+- **Server**: Express.js REST API for setup/config/auth-lite (join codes), a **WebSocket layer** for real-time state sync, and **push notifications** via Expo Push API for tag, claim, and pause events.
   - Live location broadcast (per-team position pushed every few seconds).
   - Live game-state sync (claims, steals, locks, tags, freezes, pause/resume, scoreboard, log entries) so all devices reflect state changes immediately without polling.
 - **Reconnection handling**: given outdoor/downtown GPS and connectivity gaps are likely, clients should queue outgoing actions (claim/tag/challenge results) locally and resync on reconnect; server should backfill missed state to a reconnecting client rather than assume continuous connection.
 - **Database**: persists —
   - Game/lobby metadata and settings (including selected map reference)
   - Teams (name, color, join info)
+  - **Push tokens**: per-device Expo push tokens, associated with a team in a game (for targeted notifications)
   - **Maps**: imported map files (metadata + GeoJSON data), referenced by games but independent so a map can be reused across games
   - Landmarks (snapshot copied from the selected map at game creation: name, coordinates, image, challenge text)
   - Landmark state (status, holder, locked flag) and per-team challenge attempt records
@@ -167,6 +186,7 @@ These were set to sensible defaults during this process — flag if you want dif
 | Dispute response window | 60 seconds |
 | Re-tag cooldown (same team) | 5 minutes |
 | Location update frequency | Every few seconds |
+| Push notifications | Enabled (Expo Push API) |
 | Token/transit tracking | Removed entirely |
 
 ---
@@ -175,4 +195,3 @@ These were set to sensible defaults during this process — flag if you want dif
 
 - In-app transit token tracking (removed per latest change — teams self-manage transit).
 - Photo-based tag verification (removed — honor system with dispute/void instead).
-- Push notifications (deliberately excluded; teams must check Map/Log).
