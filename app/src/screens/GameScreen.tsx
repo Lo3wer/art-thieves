@@ -31,8 +31,12 @@ export default function GameScreen() {
   const loadScoreboard = async () => {
     if (!game) return;
     try {
-      const data = await api.getScoreboard(game.id);
-      setScoreboard(data as ScoreEntry[]);
+      const data: any[] = await api.getScoreboard(game.id);
+      setScoreboard(data.map((s: any) => ({
+        team: { id: s.teamId ?? s.team?.id, name: s.name ?? s.team?.name, color: s.color ?? s.team?.color },
+        claimed: s.claimed,
+        locked: s.locked,
+      })));
     } catch {}
   };
 

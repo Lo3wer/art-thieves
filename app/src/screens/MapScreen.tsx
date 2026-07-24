@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -9,7 +9,7 @@ import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
-import type { Landmark, LandmarkState } from '../types';
+import type { Landmark, LandmarkState, LocationPing } from '../types';
 
 const MINIMAL_MAP_STYLE: any = {
   version: 8,
@@ -36,6 +36,7 @@ export default function MapScreen() {
   const myTeamId = useTeamStore((s) => s.myTeamId);
 
   const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [boundaryCoords] = useState<[number, number][]>([
     [-123.224, 49.319],
     [-123.005, 49.319],
@@ -98,9 +99,25 @@ export default function MapScreen() {
 
   const handleMarkerPress = (landmark: Landmark) => {
     setSelectedLandmark(landmark);
+    setSelectedTeamId(null);
   };
 
-  const closePanel = () => setSelectedLandmark(null);
+  const handleTeamMarkerPress = (teamId: string) => {
+    setSelectedTeamId(selectedTeamId === teamId ? null : teamId);
+    setSelectedLandmark(null);
+  };
+
+  const closePanel = () => {
+    setSelectedLandmark(null);
+    setSelectedTeamId(null);
+  };
+
+  const timeSince = useCallback((timestamp: string): string => {
+    const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const mins = Math.floor(seconds / 60);
+    return `${mins}m ago`;
+  }, []);
 
   if (!game) return null;
 
@@ -119,6 +136,13 @@ export default function MapScreen() {
   const isClaimedByMe = landmarkState?.teamId === myTeamId;
   const claimedTeam = landmarkState?.teamId
     ? game.teams.find((t) => t.id === landmarkState.teamId)
+    : null;
+
+  const selectedTeamLoc = selectedTeamId
+    ? teamLocations.find((l) => l.teamId === selectedTeamId)
+    : null;
+  const selectedTeamInfo = selectedTeamId
+    ? game.teams.find((t) => t.id === selectedTeamId)
     : null;
 
   return (
@@ -182,19 +206,38 @@ export default function MapScreen() {
 
         {teamLocations.map((loc) => {
           const color = getTeamColor(loc.teamId);
+          const isSelected = selectedTeamId === loc.teamId;
           return (
             <Marker
               key={`team-${loc.teamId}`}
               id={`team-${loc.teamId}`}
               lngLat={[loc.longitude, loc.latitude]}
+              onPress={() => handleTeamMarkerPress(loc.teamId)}
             >
-              <View style={[styles.teamMarker, { backgroundColor: color }]} />
+              <View style={[styles.teamMarkerOuter, isSelected && styles.teamMarkerSelected]}>
+                <View style={[styles.teamMarkerInner, { backgroundColor: color }]} />
+              </View>
             </Marker>
           );
         })}
       </Map>
 
-      {selectedLandmark && (
+      {selectedTeamId && selectedTeamLoc && selectedTeamInfo && (
+        <View style={styles.detailPanel}>
+          <View style={styles.detailHeader}>
+            <View style={styles.detailHeaderLeft}>
+              <View style={[styles.teamDetailDot, { backgroundColor: selectedTeamInfo.color }]} />
+              <Text style={styles.detailTitle}>{selectedTeamInfo.name}</Text>
+            </View>
+            <TouchableOpacity onPress={closePanel}>
+              <Text style={styles.closeBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.statusText}>Location updated {timeSince(selectedTeamLoc.timestamp)}</Text>
+        </View>
+      )}
+
+      {selectedLandmark && !selectedTeamId && (
         <View style={styles.detailPanel}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>{selectedLandmark.name}</Text>
@@ -240,13 +283,31 @@ const styles = StyleSheet.create({
   markerLocked: {
     opacity: 0.6,
   },
-  teamMarker: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
+  teamMarkerOuter: {
+    width: 24,
+    height: 24,
+    transform: [{ rotate: '45deg' }],
+    borderRadius: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
     borderColor: '#fff',
-    elevation: 2,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  teamMarkerSelected: {
+    borderColor: '#1a1a2e',
+    borderWidth: 3,
+  },
+  teamMarkerInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: '#fff',
+    opacity: 0.9,
   },
   detailPanel: {
     position: 'absolute', bottom: 20, left: 16, right: 16,
@@ -255,6 +316,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 6,
   },
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  detailHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  teamDetailDot: { width: 14, height: 14, borderRadius: 7 },
   detailTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e', flex: 1 },
   closeBtn: { fontSize: 20, color: '#999', paddingLeft: 12 },
   statusText: { fontSize: 14, color: '#666', marginTop: 4 },
