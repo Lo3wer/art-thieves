@@ -223,7 +223,14 @@ function processTag(
   }
 
   const tag = store.addTagEvent(gameId, taggerTeamId, targetTeamId);
-  store.addLogEntry(gameId, 'tag_created', { taggerTeamId, targetTeamId });
+  const taggerTeam = store.getTeam(taggerTeamId);
+  const targetTeam = store.getTeam(targetTeamId);
+  store.addLogEntry(gameId, 'tag_created', {
+    taggerTeamId,
+    targetTeamId,
+    taggerName: taggerTeam?.name ?? 'Unknown',
+    targetName: targetTeam?.name ?? 'Unknown',
+  });
   broadcastState(nsp, gameId);
   nsp.to(`game:${gameId}`).emit('team_frozen', {
     teamId: targetTeamId,
@@ -244,9 +251,17 @@ function processDispute(
   if (elapsed > game.config.disputeWindow * 1000) throw new Error('Dispute window has expired');
 
   store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
-  store.addLogEntry(gameId, 'tag_disputed', { tagId: activeTag.id, teamId });
+  const targetTeam = store.getTeam(teamId);
+  const taggerTeam = store.getTeam(activeTag.taggerTeamId);
+  store.addLogEntry(gameId, 'tag_disputed', {
+    tagId: activeTag.id,
+    targetTeamId: teamId,
+    targetName: targetTeam?.name ?? 'Unknown',
+    taggerTeamId: activeTag.taggerTeamId,
+    taggerName: taggerTeam?.name ?? 'Unknown',
+  });
   broadcastState(nsp, gameId);
-  nsp.to(`game:${gameId}`).emit('tag_disputed', { teamId });
+  nsp.to(`game:${gameId}`).emit('tag_disputed', { teamId, taggerTeamId: activeTag.taggerTeamId });
 }
 
 function processPause(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): void {

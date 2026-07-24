@@ -1,32 +1,26 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList,
-  StyleSheet, Alert,
+  StyleSheet, Alert, Modal,
 } from 'react-native';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { scheduleLocalNotification } from '../services/notifications';
-
-const FREEZE_DURATION = 600;
+import FrozenBar from '../components/FrozenBar';
 
 export default function TagScreen() {
   const game = useGameStore((s) => s.game);
   const myTeamId = useTeamStore((s) => s.myTeamId);
-  const isFrozen = useTeamStore((s) => s.isFrozen);
-  const freezeEndsAt = useTeamStore((s) => s.freezeEndsAt);
-  const disputeAvailableUntil = useTeamStore((s) => s.disputeAvailableUntil);
   const frozenTeams = useTeamStore((s) => s.frozenTeams);
   const tagCooldowns = useTeamStore((s) => s.tagCooldowns);
-  const setFrozen = useTeamStore((s) => s.setFrozen);
-  const setDisputeWindow = useTeamStore((s) => s.setDisputeWindow);
   const setTagCooldown = useTeamStore((s) => s.setTagCooldown);
   const setFrozenTeams = useTeamStore((s) => s.setFrozenTeams);
 
   const [noTagTimeLeft, setNoTagTimeLeft] = useState<number | null>(null);
-  const [freezeCountdown, setFreezeCountdown] = useState<number | null>(null);
-  const [disputeCountdown, setDisputeCountdown] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
 
   const otherTeams = game
     ? game.teams.filter((t) => t.id !== myTeamId)
@@ -39,19 +33,19 @@ export default function TagScreen() {
       for (const item of list) {
         map[item.teamId] = item.frozenUntil;
         if (item.teamId === myTeamId) {
-          setFrozen(true, item.frozenUntil);
+          useTeamStore.getState().setFrozen(true, item.frozenUntil);
           const gameConfig = useGameStore.getState().game?.config;
           if (gameConfig) {
             const disputeEnd = new Date(
-              new Date(item.frozenUntil).getTime() - FREEZE_DURATION * 1000 + (gameConfig.disputeWindow ?? 60) * 1000
+              new Date(item.frozenUntil).getTime() - 600 * 1000 + (gameConfig.disputeWindow ?? 60) * 1000
             ).toISOString();
-            setDisputeWindow(disputeEnd);
+            useTeamStore.getState().setDisputeWindow(disputeEnd);
           }
         }
       }
       setFrozenTeams(map);
     }).catch(() => {});
-  }, [game?.id, myTeamId, setFrozenTeams, setFrozen, setDisputeWindow]);
+  }, [game?.id, myTeamId, setFrozenTeams]);
 
   useEffect(() => {
     if (!game || !game.startedAt) return;
@@ -72,28 +66,6 @@ export default function TagScreen() {
   }, [game?.id, game?.startedAt, game?.config.noTagPeriod]);
 
   useEffect(() => {
-    if (!freezeEndsAt) { setFreezeCountdown(null); return; }
-    const tick = () => {
-      const remaining = Math.max(0, Math.floor((new Date(freezeEndsAt).getTime() - Date.now()) / 1000));
-      setFreezeCountdown(remaining);
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [freezeEndsAt]);
-
-  useEffect(() => {
-    if (!disputeAvailableUntil) { setDisputeCountdown(null); return; }
-    const tick = () => {
-      const remaining = Math.max(0, Math.floor((new Date(disputeAvailableUntil).getTime() - Date.now()) / 1000));
-      setDisputeCountdown(remaining);
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [disputeAvailableUntil]);
-
-  useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       const s = useTeamStore.getState();
@@ -111,19 +83,20 @@ export default function TagScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleTag = async (targetTeamId: string) => {
-    if (!game) return;
+  const confirmTag = async () => {
+    if (!game || !pendingTarget) return;
+    setShowTagModal(false);
     setLoading(true);
     try {
-      await api.tagTeam(game.id, targetTeamId);
-      const target = game.teams.find((t) => t.id === targetTeamId);
-      const freezeMins = Math.round(FREEZE_DURATION / 60);
+      await api.tagTeam(game.id, pendingTarget);
+      const target = game.teams.find((t) => t.id === pendingTarget);
       scheduleLocalNotification(
         'Tag Sent!',
-        `${target?.name ?? 'Team'} has been tagged and frozen for ${freezeMins} minutes`
+        `${target?.name ?? 'Team'} has been tagged and frozen for 10 minutes`
       );
       const cooldownSeconds = game.config.reTagCooldown ?? 300;
-      setTagCooldown(targetTeamId, new Date(Date.now() + cooldownSeconds * 1000).toISOString());
+      setTagCooldown(pendingTarget, new Date(Date.now() + cooldownSeconds * 1000).toISOString());
+      setPendingTarget(null);
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Failed to tag team');
     } finally {
@@ -131,19 +104,9 @@ export default function TagScreen() {
     }
   };
 
-  const handleDispute = async () => {
-    if (!game) return;
-    setLoading(true);
-    try {
-      await api.disputeTag(game.id);
-      setFrozen(false, null);
-      setDisputeWindow(null);
-      scheduleLocalNotification('Tag Disputed!', 'The tag has been voided successfully');
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Failed to dispute tag');
-    } finally {
-      setLoading(false);
-    }
+  const handleTagPress = (teamId: string) => {
+    setPendingTarget(teamId);
+    setShowTagModal(true);
   };
 
   const formatTime = (s: number) => {
@@ -166,26 +129,13 @@ export default function TagScreen() {
     return { disabled: false, label: '' };
   };
 
+  const pendingTargetName = pendingTarget
+    ? game?.teams.find((t) => t.id === pendingTarget)?.name ?? 'this team'
+    : '';
+
   return (
     <View style={styles.container}>
-      {isFrozen && (
-        <View style={styles.frozenBar}>
-          <View style={styles.frozenBarContent}>
-            <Text style={styles.frozenBarIcon}>🧊</Text>
-            <View style={styles.frozenBarInfo}>
-              <Text style={styles.frozenBarTitle}>YOU ARE FROZEN</Text>
-              {freezeCountdown != null && (
-                <Text style={styles.frozenBarTimer}>{formatTime(freezeCountdown)} remaining</Text>
-              )}
-            </View>
-            {disputeCountdown != null && disputeCountdown > 0 && (
-              <TouchableOpacity style={styles.disputeButton} onPress={handleDispute} disabled={loading}>
-                <Text style={styles.disputeButtonText}>Dispute</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
+      <FrozenBar />
 
       <Text style={styles.title}>Tag</Text>
 
@@ -206,7 +156,7 @@ export default function TagScreen() {
               return (
                 <TouchableOpacity
                   style={[styles.teamCard, disabled && styles.teamCardDisabled]}
-                  onPress={() => handleTag(item.id)}
+                  onPress={() => handleTagPress(item.id)}
                   disabled={disabled || loading}
                 >
                   <View style={[styles.teamDot, { backgroundColor: item.color }]} />
@@ -221,6 +171,34 @@ export default function TagScreen() {
           />
         </>
       )}
+
+      {/* Tag confirmation modal */}
+      <Modal visible={showTagModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalIcon}>🏷️</Text>
+            <Text style={styles.modalTitle}>Tag {pendingTargetName}?</Text>
+            <Text style={styles.modalDesc}>
+              This will freeze {pendingTargetName} for 10 minutes and mark them as tagged.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => { setShowTagModal(false); setPendingTarget(null); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmButton}
+                onPress={confirmTag}
+                disabled={loading}
+              >
+                <Text style={styles.modalConfirmText}>{loading ? '...' : 'Tag!'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -239,23 +217,31 @@ const styles = StyleSheet.create({
   teamName: { fontSize: 16, fontWeight: '600', color: '#1a1a2e', flex: 1 },
   teamNameDisabled: { color: '#999' },
   teamBadge: { fontSize: 12, fontWeight: '600', color: '#e74c3c', marginLeft: 8 },
-  frozenBar: {
-    backgroundColor: '#e8f4fd', borderRadius: 10, padding: 12, marginBottom: 12,
-    borderWidth: 1, borderColor: '#b3d9f2',
-  },
-  frozenBarContent: { flexDirection: 'row', alignItems: 'center' },
-  frozenBarIcon: { fontSize: 24, marginRight: 10 },
-  frozenBarInfo: { flex: 1 },
-  frozenBarTitle: { fontSize: 14, fontWeight: 'bold', color: '#3498db' },
-  frozenBarTimer: { fontSize: 13, color: '#555', marginTop: 2 },
-  disputeButton: {
-    backgroundColor: '#e74c3c', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8,
-  },
-  disputeButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   noTagCard: {
     backgroundColor: '#fff', padding: 24, borderRadius: 12, alignItems: 'center', marginTop: 40,
   },
   noTagTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
   noTagTimer: { fontSize: 40, fontWeight: 'bold', color: '#f39c12', fontVariant: ['tabular-nums'], marginBottom: 8 },
   noTagDesc: { fontSize: 14, color: '#888', textAlign: 'center' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 24, marginHorizontal: 32,
+    alignItems: 'center', elevation: 10,
+  },
+  modalIcon: { fontSize: 40, marginBottom: 12 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
+  modalDesc: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalCancelButton: {
+    paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10,
+    backgroundColor: '#eee',
+  },
+  modalCancelText: { fontSize: 15, fontWeight: '600', color: '#666' },
+  modalConfirmButton: {
+    paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10,
+    backgroundColor: '#e74c3c',
+  },
+  modalConfirmText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });

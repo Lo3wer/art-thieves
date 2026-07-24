@@ -59,7 +59,7 @@ function getEventText(entry: LogEntry): string {
     case 'tag_created':
       return `${data.taggerName ?? 'Unknown'} tagged ${data.targetName ?? 'Unknown'}`;
     case 'tag_disputed':
-      return `${data.targetName ?? 'Unknown'} disputed a tag`;
+      return `${data.targetName ?? 'Unknown'} disputed a tag from ${data.taggerName ?? 'Unknown'}`;
     default:
       return entry.type;
   }

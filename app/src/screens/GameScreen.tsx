@@ -6,6 +6,7 @@ import {
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import FrozenBar from '../components/FrozenBar';
 
 interface ScoreEntry {
   team: { id: string; name: string; color: string };
@@ -23,7 +24,6 @@ export default function GameScreen() {
   const game = useGameStore((s) => s.game);
   const updateStatus = useGameStore((s) => s.updateStatus);
   const isHost = useTeamStore((s) => s.isHost);
-  const isFrozen = useTeamStore((s) => s.isFrozen);
   const [scoreboard, setScoreboard] = useState<ScoreEntry[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -145,11 +145,7 @@ export default function GameScreen() {
         </View>
       )}
 
-      {isFrozen && (
-        <View style={styles.frozenBanner}>
-          <Text style={styles.frozenText}>YOU ARE FROZEN</Text>
-        </View>
-      )}
+      <FrozenBar />
 
       <FlatList
         data={sorted}
@@ -214,6 +210,8 @@ const styles = StyleSheet.create({
   pausedText: { color: '#fff', fontSize: 18, fontWeight: 'bold', letterSpacing: 2 },
   frozenBanner: { backgroundColor: '#3498db', padding: 8, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
   frozenText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  pendingBadge: { backgroundColor: '#f39c12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  pendingText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   list: { flex: 1 },
   scoreRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',

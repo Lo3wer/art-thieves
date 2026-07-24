@@ -202,6 +202,7 @@ export const store = {
 
   // Teams
   getTeamsByGame: (gameId: string) => teams.filter((t) => t.gameId === gameId),
+  getTeam: (teamId: string) => teams.find((t) => t.id === teamId) ?? null,
   isTeamNameTaken: (gameId: string, name: string) =>
     teams.some((t) => t.gameId === gameId && t.name.toLowerCase() === name.toLowerCase()),
   isTeamColorTaken: (gameId: string, color: string) =>

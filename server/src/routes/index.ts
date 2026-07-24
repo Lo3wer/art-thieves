@@ -304,7 +304,14 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
   }
 
   const tag = store.addTagEvent(game.id, teamId, targetTeamId);
-  store.addLogEntry(game.id, 'tag_created', { tagger: tag.taggerTeamId, target: tag.targetTeamId });
+  const taggerTeam = store.getTeam(teamId);
+  const targetTeam = store.getTeam(targetTeamId);
+  store.addLogEntry(game.id, 'tag_created', {
+    taggerTeamId: teamId,
+    targetTeamId,
+    taggerName: taggerTeam?.name ?? 'Unknown',
+    targetName: targetTeam?.name ?? 'Unknown',
+  });
   broadcastToGame(game.id, 'team_frozen', {
     teamId: targetTeamId,
     tagTimestamp: tag.timestamp,
@@ -324,8 +331,16 @@ router.post('/games/:id/dispute', (req, res) => {
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
   if (elapsed > game.config.disputeWindow * 1000) throw new AppError(400, 'Dispute window has expired');
   store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
-  store.addLogEntry(game.id, 'tag_disputed', { tagId: activeTag.id });
-  broadcastToGame(game.id, 'tag_disputed', { teamId });
+  const targetTeam = store.getTeam(teamId);
+  const taggerTeam = store.getTeam(activeTag.taggerTeamId);
+  store.addLogEntry(game.id, 'tag_disputed', {
+    tagId: activeTag.id,
+    targetTeamId: teamId,
+    targetName: targetTeam?.name ?? 'Unknown',
+    taggerTeamId: activeTag.taggerTeamId,
+    taggerName: taggerTeam?.name ?? 'Unknown',
+  });
+  broadcastToGame(game.id, 'tag_disputed', { teamId, taggerTeamId: activeTag.taggerTeamId });
   broadcastState(game.id);
   res.json({ voided: true });
 });

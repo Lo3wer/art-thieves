@@ -42,12 +42,15 @@ export function connectSocket(gameId: string, teamId: string): Socket {
     }
   });
 
-  socket.on('tag_disputed', (data: { teamId: string }) => {
+  socket.on('tag_disputed', (data: { teamId: string; taggerTeamId: string }) => {
     useTeamStore.getState().removeFrozenTeam(data.teamId);
     const myId = useTeamStore.getState().myTeamId;
     if (data.teamId === myId) {
       useTeamStore.getState().setFrozen(false);
       useTeamStore.getState().setDisputeWindow(null);
+    }
+    if (data.taggerTeamId === myId) {
+      useTeamStore.getState().removeTagCooldown(data.teamId);
     }
   });
 

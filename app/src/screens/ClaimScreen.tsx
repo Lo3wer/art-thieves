@@ -10,6 +10,7 @@ import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
 import { scheduleLocalNotification } from '../services/notifications';
 import type { Landmark, LandmarkState } from '../types';
+import FrozenBar from '../components/FrozenBar';
 
 type ClaimPhase = 'idle' | 'camera' | 'preview' | 'result' | 'challenge';
 
@@ -167,15 +168,6 @@ export default function ClaimScreen() {
     setChallengeAttempted(false);
   };
 
-  if (isFrozen) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.frozenTitle}>FROZEN</Text>
-        <Text style={styles.frozenSub}>You cannot claim landmarks while frozen</Text>
-      </View>
-    );
-  }
-
   const lm = nearbyLandmark();
   const state = lm ? landmarkState(lm) : null;
   const isSteal = state?.status === 'claimed' && state?.teamId !== myTeamId;
@@ -310,6 +302,7 @@ export default function ClaimScreen() {
 
   return (
     <View style={styles.centered}>
+      <FrozenBar />
       <Text style={styles.sectionTitle}>{lm.name}</Text>
       {state && (
         <Text style={styles.statusText}>
@@ -321,9 +314,13 @@ export default function ClaimScreen() {
       {lm.challengeText && (
         <Text style={styles.challengePreview}>Challenge available after claiming</Text>
       )}
-      <TouchableOpacity style={styles.primaryButton} onPress={handleTakePhoto}>
+      <TouchableOpacity
+        style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+        onPress={handleTakePhoto}
+        disabled={isFrozen}
+      >
         <Text style={styles.buttonText}>
-          {isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
+          {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -348,6 +345,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e', paddingVertical: 14, paddingHorizontal: 32,
     borderRadius: 10, marginTop: 16,
   },
+  buttonDisabled: { opacity: 0.4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   secondaryButton: { paddingVertical: 12, paddingHorizontal: 24, marginTop: 8 },
   secondaryButtonText: { color: '#1a1a2e', fontSize: 16 },
