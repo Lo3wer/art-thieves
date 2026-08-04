@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
 import { Map, Camera, Marker, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
@@ -10,6 +10,12 @@ import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
 import { emitLocation } from '../services/socket';
+import {
+  isMockLocationEnabled,
+  startMockLocation,
+  stopMockLocation,
+  jumpTo,
+} from '../services/mockLocation';
 import type { Landmark, LandmarkState, LocationPing } from '../types';
 
 const MINIMAL_MAP_STYLE: any = {
@@ -47,6 +53,7 @@ export default function MapScreen() {
   ]);
 
   useEffect(() => {
+    if (isMockLocationEnabled()) return;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
@@ -61,6 +68,47 @@ export default function MapScreen() {
       );
     })();
   }, [setOwnLocation]);
+
+  const mockRoute = useMemo(
+    () =>
+      game
+        ? game.landmarks.map((lm) => ({ latitude: lm.latitude, longitude: lm.longitude }))
+        : [],
+    [game]
+  );
+
+  const [mockWalking, setMockWalking] = useState(false);
+
+  const handleStartWalk = useCallback(() => {
+    startMockLocation(mockRoute, (lat, lng) => {
+      setOwnLocation(lat, lng);
+      emitLocation(lat, lng);
+    });
+    setMockWalking(true);
+  }, [mockRoute, setOwnLocation]);
+
+  const handleStopWalk = useCallback(() => {
+    stopMockLocation();
+    setMockWalking(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isMockLocationEnabled() || !game) return;
+    return () => stopMockLocation();
+  }, [game?.id]);
+
+  const mockStartedForGame = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isMockLocationEnabled() || !game || mockRoute.length === 0) return;
+    if (mockStartedForGame.current === game.id) return;
+    mockStartedForGame.current = game.id;
+    startMockLocation(mockRoute, (lat, lng) => {
+      setOwnLocation(lat, lng);
+      emitLocation(lat, lng);
+    });
+    setMockWalking(true);
+  }, [game?.id, mockRoute, setOwnLocation]);
 
   useEffect(() => {
     if (!game || teamLocations.length > 0) return;
@@ -265,6 +313,33 @@ export default function MapScreen() {
           )}
         </View>
       )}
+
+      {isMockLocationEnabled() && (
+        <View style={styles.mockPanel}>
+          <View style={styles.mockHeader}>
+            <Text style={styles.mockTitle}>Mock Location</Text>
+            <TouchableOpacity
+              style={[styles.mockToggle, mockWalking && styles.mockToggleActive]}
+              onPress={mockWalking ? handleStopWalk : handleStartWalk}
+            >
+              <Text style={styles.mockToggleText}>
+                {mockWalking ? 'Stop Walk' : 'Start Walk'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mockLandmarks}>
+            {game.landmarks.map((lm) => (
+              <TouchableOpacity
+                key={lm.id}
+                style={styles.mockChip}
+                onPress={() => jumpTo({ latitude: lm.latitude, longitude: lm.longitude })}
+              >
+                <Text style={styles.mockChipText}>{lm.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
@@ -324,4 +399,22 @@ const styles = StyleSheet.create({
   challengeText: { fontSize: 13, color: '#888', marginTop: 6, fontStyle: 'italic' },
   nearbyText: { fontSize: 14, fontWeight: '600', color: '#2ecc71', marginTop: 8 },
   distantText: { fontSize: 13, color: '#e74c3c', marginTop: 8 },
+  mockPanel: {
+    position: 'absolute', top: 16, left: 16, right: 16,
+    backgroundColor: 'rgba(26, 26, 46, 0.9)', borderRadius: 12, padding: 12,
+  },
+  mockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  mockTitle: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  mockToggle: {
+    backgroundColor: '#2ecc71', paddingVertical: 6, paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  mockToggleActive: { backgroundColor: '#e74c3c' },
+  mockToggleText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  mockLandmarks: { flexGrow: 0 },
+  mockChip: {
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16,
+    paddingVertical: 6, paddingHorizontal: 12, marginRight: 8,
+  },
+  mockChipText: { color: '#fff', fontSize: 12 },
 });
