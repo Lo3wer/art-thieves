@@ -139,6 +139,7 @@ export const mockApi = {
       mapId,
       status: 'lobby',
       config,
+      totalPausedMs: 0,
       teams: [],
       landmarks,
       landmarkStates: landmarks.map((l) => ({

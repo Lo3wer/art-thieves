@@ -63,6 +63,8 @@ export interface Game {
   status: GameStatus;
   config: GameConfig;
   startedAt?: string;
+  pausedAt?: string;
+  totalPausedMs: number;
   teams: Team[];
   landmarks: Landmark[];
   landmarkStates: LandmarkState[];

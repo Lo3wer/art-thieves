@@ -12,7 +12,7 @@ import {
   pushTokenSchema,
   configUpdateSchema,
 } from '../middleware/validation';
-import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition } from '../game/logic';
+import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
 
 const FREEZE_DURATION_MS = 10 * 60 * 1000;
@@ -292,8 +292,8 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
   if (teamId === targetTeamId) throw new AppError(400, 'Cannot tag yourself');
   if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
-  const startedAt = game.startedAt ? new Date(game.startedAt).getTime() : 0;
-  if (Date.now() - startedAt < game.config.noTagPeriod * 1000) throw new AppError(400, `Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
+  const activeElapsed = getActiveElapsedMs(game.startedAt, game.totalPausedMs, game.pausedAt, game.status);
+  if (activeElapsed < game.config.noTagPeriod * 1000) throw new AppError(400, `Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
   const recentTags = store.getTagsByGame(game.id).filter(
     (t) => t.taggerTeamId === teamId && t.targetTeamId === targetTeamId && !t.voided

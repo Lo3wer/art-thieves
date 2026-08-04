@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
-import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition } from '../game/logic';
+import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 
 const FREEZE_MS = 10 * 60 * 1000;
 
@@ -211,8 +211,8 @@ function processTag(
   if (taggerTeamId === targetTeamId) throw new Error('Cannot tag yourself');
   if (isTeamFrozen(gameId, taggerTeamId)) throw new Error('Your team is frozen');
 
-  const startedAt = game.startedAt ? new Date(game.startedAt).getTime() : 0;
-  if (Date.now() - startedAt < game.config.noTagPeriod * 1000) throw new Error(`Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
+  const activeElapsed = getActiveElapsedMs(game.startedAt, game.totalPausedMs, game.pausedAt, game.status);
+  if (activeElapsed < game.config.noTagPeriod * 1000) throw new Error(`Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
   const recentTags = store.getTagsByGame(gameId).filter(
     (t) => t.taggerTeamId === taggerTeamId && t.targetTeamId === targetTeamId && !t.voided

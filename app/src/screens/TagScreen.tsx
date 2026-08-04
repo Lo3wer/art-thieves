@@ -6,6 +6,7 @@ import {
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import { getActiveElapsedMs } from '../utils/gameTime';
 import { scheduleLocalNotification } from '../services/notifications';
 import FrozenBar from '../components/FrozenBar';
 
@@ -49,13 +50,22 @@ export default function TagScreen() {
 
   useEffect(() => {
     if (!game || !game.startedAt) return;
-    const started = new Date(game.startedAt).getTime();
-    const noTagEnd = started + (game.config.noTagPeriod ?? 600) * 1000;
 
     const tick = () => {
-      const now = Date.now();
-      if (now < noTagEnd) {
-        setNoTagTimeLeft(Math.floor((noTagEnd - now) / 1000));
+      const g = useGameStore.getState().game;
+      if (!g || !g.startedAt) {
+        setNoTagTimeLeft(null);
+        return;
+      }
+      const activeElapsed = getActiveElapsedMs(
+        g.startedAt,
+        g.totalPausedMs,
+        g.pausedAt,
+        g.status
+      );
+      const remainingMs = (g.config.noTagPeriod ?? 600) * 1000 - activeElapsed;
+      if (remainingMs > 0) {
+        setNoTagTimeLeft(Math.ceil(remainingMs / 1000));
       } else {
         setNoTagTimeLeft(null);
       }

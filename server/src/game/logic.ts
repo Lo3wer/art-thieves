@@ -18,6 +18,22 @@ export function haversineDistance(
   return R * c;
 }
 
+export function getActiveElapsedMs(
+  startedAt: string | undefined,
+  totalPausedMs: number,
+  pausedAt: string | undefined,
+  status: string,
+  now: number = Date.now()
+): number {
+  if (!startedAt) return 0;
+  const started = new Date(startedAt).getTime();
+  let pausedMs = totalPausedMs || 0;
+  if (status === 'paused' && pausedAt) {
+    pausedMs += now - new Date(pausedAt).getTime();
+  }
+  return Math.max(0, now - started - pausedMs);
+}
+
 export function isWithinVicinity(
   lat1: number,
   lon1: number,
