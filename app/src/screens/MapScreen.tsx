@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
-import { Map, Camera, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
+import { Map, Camera, GeoJSONSource, Layer, Marker as MapMarker } from '@maplibre/maplibre-react-native';
+import { FontAwesome } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { useGameStore } from '../stores/useGameStore';
@@ -34,6 +35,20 @@ const MINIMAL_MAP_STYLE: any = {
 
 const MAP_STYLE = (Constants.expoConfig?.extra as any)?.mapStyle
   ?? MINIMAL_MAP_STYLE;
+
+const LANDMARK_ICON: Record<LandmarkState['status'], 'lock' | 'unlock'> = {
+  unclaimed: 'unlock',
+  claimed: 'unlock',
+  locked: 'lock',
+};
+
+const LANDMARK_HALO: Record<LandmarkState['status'], number> = {
+  unclaimed: 24,
+  claimed: 32,
+  locked: 36,
+};
+
+const TEAM_HALO = 32;
 
 export default function MapScreen() {
   const game = useGameStore((s) => s.game);
@@ -168,72 +183,18 @@ export default function MapScreen() {
     centerOnOwnTeam();
   }, [centerOnOwnTeam]);
 
-  const handleLandmarkPress = useCallback((event: any) => {
-    const features = (event?.nativeEvent ?? event)?.features;
-    const id = features?.[0]?.properties?.id;
-    if (!id || !game) return;
+  const handleLandmarkPress = useCallback((id: string) => {
+    if (!game) return;
     const landmark = game.landmarks.find((l) => l.id === id);
     if (!landmark) return;
     setSelectedLandmark(landmark);
     setSelectedTeamId(null);
   }, [game]);
 
-  const handleTeamPress = useCallback((event: any) => {
-    const features = (event?.nativeEvent ?? event)?.features;
-    const id = features?.[0]?.properties?.id;
-    if (!id) return;
+  const handleTeamPress = useCallback((id: string) => {
     setSelectedTeamId((prev) => (prev === id ? null : id));
     setSelectedLandmark(null);
   }, []);
-
-  const landmarkFeatures = useMemo(() => {
-    if (!game) {
-      return { type: 'FeatureCollection' as const, features: [] };
-    }
-    return {
-      type: 'FeatureCollection' as const,
-      features: game.landmarks.map((lm) => {
-        const state = game.landmarkStates.find((s) => s.landmarkId === lm.id);
-        const status = state?.status ?? 'unclaimed';
-        const color =
-          status === 'unclaimed'
-            ? '#999'
-            : game.teams.find((t) => t.id === state?.teamId)?.color ?? '#999';
-        return {
-          type: 'Feature' as const,
-          properties: {
-            id: lm.id,
-            color,
-            status,
-            haloRadius: status === 'locked' ? 18 : status === 'claimed' ? 16 : 10,
-          },
-          geometry: {
-            type: 'Point' as const,
-            coordinates: [lm.longitude, lm.latitude],
-          },
-        };
-      }),
-    };
-  }, [game]);
-
-  const teamFeatures = useMemo(
-    () => ({
-      type: 'FeatureCollection' as const,
-      features: teamLocations.map((loc) => ({
-        type: 'Feature' as const,
-        properties: {
-          id: loc.teamId,
-          color: getTeamColor(loc.teamId),
-          selected: selectedTeamId === loc.teamId,
-        },
-        geometry: {
-          type: 'Point' as const,
-          coordinates: [loc.longitude, loc.latitude],
-        },
-      })),
-    }),
-    [teamLocations, selectedTeamId, getTeamColor]
-  );
 
   const closePanel = () => {
     setSelectedLandmark(null);
@@ -306,79 +267,51 @@ export default function MapScreen() {
           />
         </GeoJSONSource>
 
-        <GeoJSONSource
-          id="landmark-source"
-          data={landmarkFeatures as any}
-          onPress={handleLandmarkPress}
-        >
-          <Layer
-            id="lm-halo"
-            type="circle"
-            paint={{
-              'circle-color': '#ffffff',
-              'circle-radius': ['get', 'haloRadius'],
-            }}
-          />
-          <Layer
-            id="lm-unclaimed"
-            type="circle"
-            filter={['==', ['get', 'status'], 'unclaimed']}
-            paint={{ 'circle-color': '#999', 'circle-radius': 8 }}
-          />
-          <Layer
-            id="lm-claimed"
-            type="circle"
-            filter={['==', ['get', 'status'], 'claimed']}
-            paint={{ 'circle-color': ['get', 'color'], 'circle-radius': 12 }}
-          />
-          <Layer
-            id="lm-claimed-core"
-            type="circle"
-            filter={['==', ['get', 'status'], 'claimed']}
-            paint={{ 'circle-color': '#ffffff', 'circle-radius': 8 }}
-          />
-          <Layer
-            id="lm-locked"
-            type="circle"
-            filter={['==', ['get', 'status'], 'locked']}
-            paint={{ 'circle-color': ['get', 'color'], 'circle-radius': 13 }}
-          />
-          <Layer
-            id="lm-locked-core"
-            type="circle"
-            filter={['==', ['get', 'status'], 'locked']}
-            paint={{ 'circle-color': '#1a1a2e', 'circle-radius': 5 }}
-          />
-        </GeoJSONSource>
+        {game.landmarks.map((lm) => {
+          const state = getLandmarkState(lm.id);
+          const status = state?.status ?? 'unclaimed';
+          const color = status === 'unclaimed' ? '#999' : getTeamColor(state?.teamId);
+          const halo = LANDMARK_HALO[status];
+          return (
+            <MapMarker
+              key={lm.id}
+              id={lm.id}
+              lngLat={[lm.longitude, lm.latitude]}
+              onPress={() => handleLandmarkPress(lm.id)}
+            >
+              <View
+                style={[
+                  styles.markerHalo,
+                  { width: halo, height: halo, borderRadius: halo / 2 },
+                ]}
+              >
+                <FontAwesome name={LANDMARK_ICON[status]} size={halo * 0.5} color={color} />
+              </View>
+            </MapMarker>
+          );
+        })}
 
-        <GeoJSONSource id="team-source" data={teamFeatures as any} onPress={handleTeamPress}>
-          <Layer
-            id="team-halo"
-            type="circle"
-            paint={{ 'circle-color': '#ffffff', 'circle-radius': 15 }}
-          />
-          <Layer
-            id="team-fill"
-            type="circle"
-            paint={{ 'circle-color': ['get', 'color'], 'circle-radius': 11 }}
-          />
-          <Layer
-            id="team-selected-ring"
-            type="circle"
-            filter={['==', ['get', 'selected'], true]}
-            paint={{
-              'circle-color': 'transparent',
-              'circle-radius': 17,
-              'circle-stroke-width': 3,
-              'circle-stroke-color': '#1a1a2e',
-            }}
-          />
-          <Layer
-            id="team-core"
-            type="circle"
-            paint={{ 'circle-color': '#ffffff', 'circle-radius': 3 }}
-          />
-        </GeoJSONSource>
+        {teamLocations.map((loc) => {
+          const selected = selectedTeamId === loc.teamId;
+          return (
+            <MapMarker
+              key={loc.teamId}
+              id={loc.teamId}
+              lngLat={[loc.longitude, loc.latitude]}
+              onPress={() => handleTeamPress(loc.teamId)}
+            >
+              <View
+                style={[
+                  styles.markerHalo,
+                  styles.teamHalo,
+                  selected && styles.teamHaloSelected,
+                ]}
+              >
+                <FontAwesome name="user" size={16} color={getTeamColor(loc.teamId)} />
+              </View>
+            </MapMarker>
+          );
+        })}
       </Map>
 
       {selectedTeamId && selectedTeamLoc && selectedTeamInfo && (
@@ -458,6 +391,13 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+  markerHalo: {
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamHalo: { width: TEAM_HALO, height: TEAM_HALO, borderRadius: TEAM_HALO / 2 },
+  teamHaloSelected: { borderWidth: 3, borderColor: '#1a1a2e' },
   detailPanel: {
     position: 'absolute', bottom: 20, left: 16, right: 16,
     backgroundColor: '#fff', borderRadius: 14, padding: 18,
