@@ -3,6 +3,7 @@ import { API_BASE } from '../../api';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import { useLogStore } from '../stores/useLogStore';
 
 let socket: Socket | null = null;
 
@@ -21,8 +22,16 @@ export function connectSocket(gameId: string, teamId: string): Socket {
     socket?.emit('join_game', { gameId, teamId });
   });
 
-  socket.on('state_update', (data: { game: any }) => {
-    useGameStore.getState().setGame(data.game);
+  socket.on('state_update', (data: { game?: any; diff?: any }) => {
+    if (data.game) {
+      useGameStore.getState().setGame(data.game);
+    } else if (data.diff) {
+      useGameStore.getState().applyDiff(data.diff);
+    }
+  });
+
+  socket.on('log_entry', (entry: any) => {
+    useLogStore.getState().append(entry);
   });
 
   socket.on('location_broadcast', (data: { teamId: string; latitude: number; longitude: number; timestamp: string }) => {

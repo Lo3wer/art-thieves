@@ -24,6 +24,7 @@ export function normalizeGame(game: Game): Game {
 interface GameStore {
   game: Game | null;
   setGame: (game: Game) => void;
+  applyDiff: (diff: any) => void;
   updateStatus: (status: GameStatus) => void;
   updateLandmarkState: (state: LandmarkState) => void;
   clearGame: () => void;
@@ -32,6 +33,27 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set) => ({
   game: null,
   setGame: (game) => set({ game: normalizeGame(game) }),
+  applyDiff: (diff) =>
+    set((s) => {
+      if (!s.game) return s;
+      const game = s.game;
+      const next: Game = { ...game };
+      if (diff.status !== undefined) next.status = diff.status;
+      if (diff.startedAt !== undefined) next.startedAt = diff.startedAt;
+      if (diff.pausedAt !== undefined) next.pausedAt = diff.pausedAt;
+      if (diff.totalPausedMs !== undefined) next.totalPausedMs = diff.totalPausedMs;
+      if (diff.config) next.config = diff.config;
+      if (diff.addedTeams) next.teams = [...game.teams, ...diff.addedTeams];
+      if (diff.landmarkStates) {
+        const map = new Map(game.landmarkStates.map((x) => [x.landmarkId, x]));
+        diff.landmarkStates.forEach((raw: any) => {
+          const normalized = normalizeState(raw);
+          map.set(normalized.landmarkId, normalized);
+        });
+        next.landmarkStates = [...map.values()];
+      }
+      return { game: next };
+    }),
   updateStatus: (status) =>
     set((s) => {
       if (!s.game) return s;

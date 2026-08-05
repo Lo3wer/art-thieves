@@ -24,28 +24,8 @@ export default function GameScreen() {
   const game = useGameStore((s) => s.game);
   const updateStatus = useGameStore((s) => s.updateStatus);
   const isHost = useTeamStore((s) => s.isHost);
-  const [scoreboard, setScoreboard] = useState<ScoreEntry[]>([]);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
-
-  const loadScoreboard = async () => {
-    if (!game) return;
-    try {
-      const data: any[] = await api.getScoreboard(game.id);
-      setScoreboard(data.map((s: any) => ({
-        team: { id: s.teamId ?? s.team?.id, name: s.name ?? s.team?.name, color: s.color ?? s.team?.color },
-        claimed: s.claimed,
-        locked: s.locked,
-      })));
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (!game) return;
-    loadScoreboard();
-    const interval = setInterval(loadScoreboard, 3000);
-    return () => clearInterval(interval);
-  }, [game?.id]);
 
   useEffect(() => {
     if (!game || game.status !== 'active') return;
@@ -111,6 +91,15 @@ export default function GameScreen() {
   };
 
   if (!game) return null;
+
+  const scoreboard: ScoreEntry[] = game.teams.map((t) => {
+    const mine = game.landmarkStates.filter((s) => s.teamId === t.id);
+    return {
+      team: { id: t.id, name: t.name, color: t.color },
+      claimed: mine.length,
+      locked: mine.filter((s) => s.status === 'locked').length,
+    };
+  });
 
   const sorted = [...scoreboard].sort((a, b) => {
     if (b.claimed !== a.claimed) return b.claimed - a.claimed;

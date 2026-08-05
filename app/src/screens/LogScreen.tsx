@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
+import { useLogStore } from '../stores/useLogStore';
 import type { LogEntry } from '../types';
 
 const EVENT_ICONS: Record<string, string> = {
@@ -67,24 +68,28 @@ function getEventText(entry: LogEntry): string {
 
 export default function LogScreen() {
   const game = useGameStore((s) => s.game);
-  const [log, setLog] = useState<LogEntry[]>([]);
+  const entries = useLogStore((s) => s.entries);
+  const setEntries = useLogStore((s) => s.setEntries);
   const [filterTeamId, setFilterTeamId] = useState<string | undefined>(undefined);
 
-  const loadLog = useCallback(async () => {
-    if (!game) return;
-    try {
-      const data = await api.getLog(game.id, filterTeamId);
-      setLog(data as LogEntry[]);
-    } catch {}
-  }, [game?.id, filterTeamId]);
-
   useEffect(() => {
-    loadLog();
-    const interval = setInterval(loadLog, 3000);
-    return () => clearInterval(interval);
-  }, [loadLog]);
+    if (!game) return;
+    (async () => {
+      try {
+        const data = await api.getLog(game.id);
+        setEntries(data as LogEntry[]);
+      } catch {}
+    })();
+  }, [game?.id, setEntries]);
 
   if (!game) return null;
+
+  const log = filterTeamId
+    ? entries.filter((e) => {
+        const data = e.data as Record<string, string>;
+        return data?.teamId === filterTeamId || data?.targetTeamId === filterTeamId;
+      })
+    : entries;
 
   return (
     <View style={styles.container}>

@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
+import { broadcastState, seedSnapshot } from './broadcast';
 
 const FREEZE_MS = 10 * 60 * 1000;
 
@@ -29,6 +30,7 @@ export function registerGameHandlers(io: Server): void {
             landmarkStates: store.getLandmarkStates(gameId),
           },
         });
+        seedSnapshot(gameId);
       }
     });
 
@@ -101,18 +103,6 @@ export function registerGameHandlers(io: Server): void {
   });
 }
 
-function broadcastState(nsp: ReturnType<Server['of']>, gameId: string): void {
-  const game = store.getGame(gameId);
-  if (!game) return;
-  const state = {
-    ...game,
-    teams: store.getTeamsByGame(gameId),
-    landmarks: store.getLandmarksByGame(gameId),
-    landmarkStates: store.getLandmarkStates(gameId),
-  };
-  nsp.to(`game:${gameId}`).emit('state_update', { game: state });
-}
-
 function getGameOrThrow(gameId: string): NonNullable<ReturnType<typeof store.getGame>> {
   const game = store.getGame(gameId);
   if (!game) throw new Error('Game not found');
@@ -157,7 +147,7 @@ function processClaim(
   const scores = computeScoreboard(teams, states);
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
 
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
 
   if (win.winner) {
     store.updateGame(gameId, { status: 'ended' });
@@ -193,7 +183,7 @@ function processChallenge(
   const scores = computeScoreboard(teams, states);
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
 
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
 
   if (win.winner) {
     store.updateGame(gameId, { status: 'ended' });
@@ -231,7 +221,7 @@ function processTag(
     taggerName: taggerTeam?.name ?? 'Unknown',
     targetName: targetTeam?.name ?? 'Unknown',
   });
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('team_frozen', {
     teamId: targetTeamId,
     tagTimestamp: tag.timestamp,
@@ -260,7 +250,7 @@ function processDispute(
     taggerTeamId: activeTag.taggerTeamId,
     taggerName: taggerTeam?.name ?? 'Unknown',
   });
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('tag_disputed', { teamId, taggerTeamId: activeTag.taggerTeamId });
 }
 
@@ -269,7 +259,7 @@ function processPause(gameId: string, socket: Socket, nsp: ReturnType<Server['of
   if (game.status !== 'active') throw new Error('Game is not active');
   store.updateGame(gameId, { status: 'paused', pausedAt: new Date().toISOString() });
   store.addLogEntry(gameId, 'game_paused', {});
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_paused', {});
 }
 
@@ -279,7 +269,7 @@ function processResume(gameId: string, socket: Socket, nsp: ReturnType<Server['o
   const pausedMs = game.pausedAt ? Date.now() - new Date(game.pausedAt).getTime() : 0;
   store.updateGame(gameId, { status: 'active', pausedAt: undefined, totalPausedMs: game.totalPausedMs + pausedMs });
   store.addLogEntry(gameId, 'game_resumed', {});
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_resumed', {});
 }
 
@@ -291,6 +281,6 @@ function processEnd(gameId: string, socket: Socket, nsp: ReturnType<Server['of']
   const result = computeWinner(scores);
   store.updateGame(gameId, { status: 'ended' });
   store.addLogEntry(gameId, 'game_ended', result);
-  broadcastState(nsp, gameId);
+  broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_ended', { ...result, scores });
 }
