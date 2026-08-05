@@ -52,7 +52,7 @@ export const claimSchema = z.object({
 
 export const challengeSchema = z.object({
   landmarkId: z.string().uuid(),
-  outcome: z.enum(['complete', 'fail', 'veto']),
+  outcome: z.enum(['complete', 'fail', 'pass']),
   teamId: z.string().uuid(),
 });
 

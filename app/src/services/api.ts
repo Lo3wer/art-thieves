@@ -97,10 +97,10 @@ export const api = USE_MOCKS
           method: 'POST',
           body: JSON.stringify({ landmarkId, outcome: 'fail', teamId: getTeamId() }),
         }),
-      vetoChallenge: (gameId: string, landmarkId: string) =>
+      passChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'veto', teamId: getTeamId() }),
+          body: JSON.stringify({ landmarkId, outcome: 'pass', teamId: getTeamId() }),
         }),
       tagTeam: (gameId: string, targetTeamId: string) =>
         request<void>(`/api/games/${gameId}/tag`, {

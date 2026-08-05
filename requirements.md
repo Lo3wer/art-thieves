@@ -16,9 +16,9 @@ Three teams compete to claim the most public art installations ("Landmarks") acr
 - Landmarks are defined in the game's selected map (see §2.6). The default Vancouver map includes 40 landmarks; custom maps may have any number. Each landmark has an optional challenge.
 - **Claim**: a team claims a Landmark by visiting it (within the vicinity radius) and taking a selfie in front of it.
 - **Steal**: visiting a Landmark already claimed by another team transfers the claim to the visiting team. The app must show a confirmation ("You will steal this Landmark from {team}") before finalizing.
-- **Lock**: completing a Landmark's challenge locks it — it can no longer be stolen. Failing or vetoing leaves it claimed but vulnerable to steal.
+- **Lock**: completing a Landmark's challenge locks it — it can no longer be stolen. Failing or passing leaves it claimed but vulnerable to steal.
 - **Notifications**: when a team's landmark is claimed or stolen, all members of that team receive a push notification ("{team} claimed {Landmark}" / "{team} stole {Landmark} from you").
-- **Challenge attempts**: each team gets exactly one attempt (complete/fail/veto) per Landmark, tracked independently per team — a team that steals a Landmark gets its own fresh attempt regardless of the previous holder's outcome.
+- **Challenge attempts**: each team gets exactly one attempt (complete/fail/pass) per Landmark, tracked independently per team — a team that steals a Landmark gets its own fresh attempt regardless of the previous holder's outcome.
 - **Vicinity radius**: default 30m from a Landmark's coordinates, host-configurable at setup. Required to claim or attempt a challenge.
 
 ### 2.2 Win Conditions
@@ -29,7 +29,7 @@ Three teams compete to claim the most public art installations ("Landmarks") acr
 ### 2.3 Tagging (Honor System)
 - Any team can tag any other team at any time by pressing **Tag** and selecting the target team — no GPS proximity check and no photo required.
 - Tagging immediately freezes the target team.
-- While frozen, a team cannot: move (in-game sense — no claim/challenge actions), claim Landmarks, attempt/complete/veto challenges, or tag other teams.
+- While frozen, a team cannot: move (in-game sense — no claim/challenge actions), claim Landmarks, attempt/complete/pass challenges, or tag other teams.
 - Freeze duration: 10 minutes.
 - **Dispute**: the tagged team sees a Dispute button for a short window after being tagged (default 60s). Pressing it auto-voids the tag immediately with no penalty to either side. Ignoring it means the tag stands.
 - **Notifications**: the tagged team receives a push notification ("You've been tagged by {team}"). The tagging team receives a push notification if their tag is disputed or confirmed.
@@ -134,10 +134,10 @@ Tab-based navigation, consistent across teams' devices; host device additionally
 ### 3.4 "Claim" Tab
 - Active only when the team's GPS is within a Landmark's vicinity radius; shows that Landmark's info (name, image).
 - **Claim flow**: opens camera → team selfie → confirm/retake → on confirm, updates status to claimed (with steal confirmation if applicable).
-- **Challenge flow**: displays challenge text with three buttons — **Complete**, **Fail**, **Veto**.
+- **Challenge flow**: displays challenge text with three buttons — **Complete**, **Fail**, **Pass**.
   - Complete → Landmark becomes locked.
-  - Fail / Veto → Landmark stays claimed but vulnerable; logged distinctly; no further attempts allowed for this team.
-  - If the Landmark is already locked, or this team has already failed/vetoed here, show **"Challenge Unavailable"** instead of the challenge.
+  - Fail / Pass → Landmark stays claimed but vulnerable; logged distinctly; no further attempts allowed for this team.
+  - If the Landmark is already locked, or this team has already failed/passed here, show **"Challenge Unavailable"** instead of the challenge.
 
 ### 3.5 "Tag" Tab
 - **Tag** button + team selector (choose which rival team to tag) → immediate freeze on target, no camera/photo step.
@@ -146,7 +146,7 @@ Tab-based navigation, consistent across teams' devices; host device additionally
 - Confirmation is required for both tag and dispute.
 
 ### 3.6 "Log" Tab
-- Chronological, timestamped event feed: claims, steals, locks, failed/vetoed challenges, tags (including disputes/voids), pauses/resumes, game start/end.
+- Chronological, timestamped event feed: claims, steals, locks, failed/passed challenges, tags (including disputes/voids), pauses/resumes, game start/end.
 - Filterable by team.
 - Push notifications supplement real-time socket events when the app is backgrounded (see §2.9).
 

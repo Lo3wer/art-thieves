@@ -44,7 +44,7 @@ export interface ChallengeAttempt {
   gameId: string;
   landmarkId: string;
   teamId: string;
-  outcome: 'complete' | 'fail' | 'veto';
+  outcome: 'complete' | 'fail' | 'pass';
   createdAt: string;
 }
 

@@ -305,7 +305,7 @@ export const mockApi = {
     });
   },
 
-  vetoChallenge: async (gameId: string, landmarkId: string) => {
+  passChallenge: async (gameId: string, landmarkId: string) => {
     const entry = games[gameId];
     if (!entry) throw new Error('Game not found');
     if (!currentTeamId) throw new Error('No current team');
@@ -315,7 +315,7 @@ export const mockApi = {
 
     const landmark = entry.game.landmarks.find((l) => l.id === landmarkId);
     const team = entry.teams.find((t) => t.id === currentTeamId);
-    addLog(entry, 'challenge_vetoed', {
+    addLog(entry, 'challenge_pass', {
       landmarkName: landmark?.name ?? '',
       teamName: team?.name ?? '',
     });

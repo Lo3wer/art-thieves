@@ -17,9 +17,9 @@ const EVENT_ICONS: Record<string, string> = {
   game_ended: '⏹️',
   landmark_claimed: '📸',
   landmark_stolen: '⚔️',
-  challenge_completed: '🔒',
-  challenge_failed: '❌',
-  challenge_vetoed: '🛑',
+  challenge_complete: '🔒',
+  challenge_fail: '❌',
+  challenge_pass: '➡️',
   tag_created: '🏷️',
   tag_disputed: '🔄',
 };
@@ -51,12 +51,12 @@ function getEventText(entry: LogEntry): string {
       return `${data.teamName ?? 'Unknown'} claimed ${data.landmarkName ?? 'a landmark'}`;
     case 'landmark_stolen':
       return `${data.teamName ?? 'Unknown'} stole ${data.landmarkName ?? 'a landmark'} from ${data.fromTeamName ?? 'Unknown'}`;
-    case 'challenge_completed':
+    case 'challenge_complete':
       return `${data.teamName ?? 'Unknown'} completed challenge on ${data.landmarkName ?? 'a landmark'} (LOCKED)`;
-    case 'challenge_failed':
+    case 'challenge_fail':
       return `${data.teamName ?? 'Unknown'} failed challenge on ${data.landmarkName ?? 'a landmark'}`;
-    case 'challenge_vetoed':
-      return `${data.teamName ?? 'Unknown'} vetoed challenge on ${data.landmarkName ?? 'a landmark'}`;
+    case 'challenge_pass':
+      return `${data.teamName ?? 'Unknown'} passed challenge on ${data.landmarkName ?? 'a landmark'}`;
     case 'tag_created':
       return `${data.taggerName ?? 'Unknown'} tagged ${data.targetName ?? 'Unknown'}`;
     case 'tag_disputed':

@@ -103,7 +103,7 @@ export interface GameSummaryLandmark {
   teamId: string | null;
   teamName: string | null;
   claimedAt: string | null;
-  challenge: { outcome: 'complete' | 'fail' | 'veto'; teamId: string; createdAt: string } | null;
+  challenge: { outcome: 'complete' | 'fail' | 'pass'; teamId: string; createdAt: string } | null;
 }
 
 export interface GameSummary {

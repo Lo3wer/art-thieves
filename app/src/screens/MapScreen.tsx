@@ -205,7 +205,7 @@ export default function MapScreen() {
             id: lm.id,
             color,
             status,
-            haloRadius: status === 'locked' ? 16 : status === 'claimed' ? 15 : 9,
+            haloRadius: status === 'locked' ? 18 : status === 'claimed' ? 16 : 10,
           },
           geometry: {
             type: 'Point' as const,

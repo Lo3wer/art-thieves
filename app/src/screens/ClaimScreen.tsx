@@ -150,7 +150,7 @@ export default function ClaimScreen() {
     }
   };
 
-  const handleChallenge = async (outcome: 'complete' | 'fail' | 'veto') => {
+  const handleChallenge = async (outcome: 'complete' | 'fail' | 'pass') => {
     const lm = nearbyLandmark();
     if (!lm || !game) return;
     setLoading(true);
@@ -168,8 +168,8 @@ export default function ClaimScreen() {
         await api.failChallenge(game.id, lm.id);
         setResultMessage(`Challenge failed for ${lm.name}`);
       } else {
-        await api.vetoChallenge(game.id, lm.id);
-        setResultMessage(`Challenge vetoed for ${lm.name}`);
+        await api.passChallenge(game.id, lm.id);
+        setResultMessage(`Challenge passed for ${lm.name}`);
       }
       setChallengeAttempted(true);
       setPhase('result');
@@ -274,10 +274,10 @@ export default function ClaimScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.challengeBtn, { backgroundColor: '#f39c12' }]}
-              onPress={() => handleChallenge('veto')}
+              onPress={() => handleChallenge('pass')}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>Veto</Text>
+              <Text style={styles.buttonText}>Pass</Text>
             </TouchableOpacity>
           </View>
         )}

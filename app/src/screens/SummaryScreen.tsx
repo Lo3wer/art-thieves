@@ -17,10 +17,10 @@ const STATUS_LABEL: Record<'unclaimed' | 'claimed' | 'locked', string> = {
   locked: 'Locked',
 };
 
-const CHALLENGE_LABEL: Record<'complete' | 'fail' | 'veto', string> = {
+const CHALLENGE_LABEL: Record<'complete' | 'fail' | 'pass', string> = {
   complete: 'Challenge completed',
   fail: 'Challenge failed',
-  veto: 'Challenge vetoed',
+  pass: 'Challenge passed',
 };
 
 export default function SummaryScreen() {

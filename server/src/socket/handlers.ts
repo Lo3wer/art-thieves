@@ -63,9 +63,9 @@ export function registerGameHandlers(io: Server): void {
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('veto_challenge', ({ landmarkId }: { landmarkId: string }) => {
+    socket.on('pass_challenge', ({ landmarkId }: { landmarkId: string }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processChallenge(currentGameId, currentTeamId, landmarkId, 'veto', socket, gameNsp); }
+      try { processChallenge(currentGameId, currentTeamId, landmarkId, 'pass', socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
@@ -158,7 +158,7 @@ function processClaim(
 
 function processChallenge(
   gameId: string, teamId: string, landmarkId: string,
-  outcome: 'complete' | 'fail' | 'veto',
+  outcome: 'complete' | 'fail' | 'pass',
   socket: Socket, nsp: ReturnType<Server['of']>
 ): void {
   const game = getGameOrThrow(gameId);

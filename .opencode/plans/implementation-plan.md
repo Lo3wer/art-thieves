@@ -116,8 +116,8 @@ Verification steps at each part ensure you're never debugging client + server + 
   - If stealing: show "You will steal this Landmark from {team}" confirmation modal
 - **Challenge flow** (after successful claim):
   - Display challenge text
-  - 3 buttons: **Complete** / **Fail** / **Veto**
-  - Complete → lock icon shown; Fail/Veto → stays claimed
+  - 3 buttons: **Complete** / **Fail** / **Pass**
+  - Complete → lock icon shown; Fail/Pass → stays claimed
   - If already locked or team already attempted: show "Challenge Unavailable"
 - Mock service: `services/__mocks__/api.ts` tracks claim/challenge state in-memory per game
 - Mock notifications: when a claim/steal succeeds on a rival's landmark, fire a local notification preview simulating what the pushed team would receive ("{team} claimed {Landmark}" / "{team} stole {Landmark} from you")
@@ -166,7 +166,7 @@ Verification steps at each part ensure you're never debugging client + server + 
   - Host-only: Pause / Resume / End Game buttons
   - Pause overlay: "Game Paused" banner across all screens
 - **LogScreen:**
-  - Chronological event FlatList (claim, steal, lock, challenge fail/veto, tag, dispute, pause/resume, game start/end)
+  - Chronological event FlatList (claim, steal, lock, challenge fail/pass, tag, dispute, pause/resume, game start/end)
   - Filter dropdown by team
   - Real-time new entries via mock socket events
 - Mock scoreboard updates on claim/challenge events; mock clock ticks
@@ -264,7 +264,7 @@ Verification steps at each part ensure you're never debugging client + server + 
 
 - Socket.IO on Express, namespace `/game`
 - Rooms: socket joins game room on `join_game`
-- Client→Server events: `location_update`, `claim_landmark`, `steal_landmark`, `complete_challenge`, `fail_challenge`, `veto_challenge`, `tag_team`, `dispute_tag`, `pause_game`, `resume_game`, `end_game`
+- Client→Server events: `location_update`, `claim_landmark`, `steal_landmark`, `complete_challenge`, `fail_challenge`, `pass_challenge`, `tag_team`, `dispute_tag`, `pause_game`, `resume_game`, `end_game`
 - Server→Client events: `state_update`, `location_broadcast`, `game_ended`, `game_paused`, `game_resumed`
 - `game_state_sync` on reconnect (full state snapshot from in-memory store)
 - Idempotency by client action ID
@@ -284,7 +284,7 @@ Verification steps at each part ensure you're never debugging client + server + 
   - Emit `state_update`
 - **Challenge:**
   - Validate vicinity, one attempt per team, not locked
-  - Complete → lock; Fail/Veto → record attempt
+  - Complete → lock; Fail/Pass → record attempt
   - Emit `state_update`
 - **Win check:** after every claim/challenge, count claimed landmarks per team. If `>= winThreshold` → emit `game_ended`
 - **Tag/Dispute:**
