@@ -9,6 +9,7 @@ import MapScreen from '../screens/MapScreen';
 import ClaimScreen from '../screens/ClaimScreen';
 import TagScreen from '../screens/TagScreen';
 import LogScreen from '../screens/LogScreen';
+import SummaryScreen from '../screens/SummaryScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -26,6 +27,7 @@ export default function AppNavigator() {
   const myTeamColor = useTeamStore((s) => s.myTeamColor);
   const teamColor = myTeamColor ?? '#1a1a2e';
   const hasActiveGame = game !== null && game.status !== 'ended' && game.status !== 'lobby';
+  const isEnded = game !== null && game.status === 'ended';
 
   return (
     <NavigationContainer>
@@ -43,7 +45,13 @@ export default function AppNavigator() {
           headerShown: false,
         })}
       >
-        {hasActiveGame ? (
+        {isEnded ? (
+          <Tab.Screen
+            name="Summary"
+            component={SummaryScreen}
+            options={{ tabBarStyle: { display: 'none' } }}
+          />
+        ) : hasActiveGame ? (
           <>
             <Tab.Screen name="Game" component={GameScreen} />
             <Tab.Screen name="Map" component={MapScreen} />

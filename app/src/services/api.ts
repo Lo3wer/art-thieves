@@ -1,4 +1,4 @@
-import type { Game, GameMap, Team, GameConfig } from '../types';
+import type { Game, GameMap, Team, GameConfig, GameSummary } from '../types';
 import { API_BASE } from '../../api';
 import { useTeamStore } from '../stores/useTeamStore';
 
@@ -119,6 +119,8 @@ export const api = USE_MOCKS
         }),
       getScoreboard: (gameId: string) =>
         request<unknown[]>(`/api/games/${gameId}/scoreboard`),
+      getSummary: (gameId: string) =>
+        request<GameSummary>(`/api/games/${gameId}/summary`),
       getLog: (gameId: string, teamId?: string) => {
         const params = teamId ? `?teamId=${teamId}` : '';
         return request<unknown[]>(`/api/games/${gameId}/log${params}`);

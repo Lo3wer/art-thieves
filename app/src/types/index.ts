@@ -94,3 +94,21 @@ export interface LocationPing {
   longitude: number;
   timestamp: string;
 }
+
+export interface GameSummaryLandmark {
+  id: string;
+  name: string;
+  mapLandmarkIndex: number;
+  status: 'unclaimed' | 'claimed' | 'locked';
+  teamId: string | null;
+  teamName: string | null;
+  claimedAt: string | null;
+  challenge: { outcome: 'complete' | 'fail' | 'veto'; teamId: string; createdAt: string } | null;
+}
+
+export interface GameSummary {
+  winner: { id: string | null; isTie: boolean; name: string | null; color: string | null };
+  scores: { teamId: string; name: string; color: string; claimed: number; locked: number }[];
+  tags: { teamId: string; given: number; received: number }[];
+  landmarks: GameSummaryLandmark[];
+}

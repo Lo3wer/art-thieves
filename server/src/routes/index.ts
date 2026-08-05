@@ -353,6 +353,56 @@ router.post('/games/:id/push-token', validate(pushTokenSchema), (req, res) => {
   res.status(201).json({ registered: true });
 });
 
+// Summary (post-game)
+router.get('/games/:id/summary', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const teams = store.getTeamsByGame(game.id);
+  const states = store.getLandmarkStates(game.id);
+  const landmarks = store.getLandmarksByGame(game.id);
+  const tags = store.getTagsByGame(game.id);
+  const scores = computeScoreboard(teams, states);
+  const result = computeWinner(scores);
+
+  const teamName = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+  const teamColor = Object.fromEntries(teams.map((t) => [t.id, t.color]));
+
+  const tagsByTeam = teams.map((t) => ({
+    teamId: t.id,
+    given: tags.filter((x) => x.taggerTeamId === t.id && !x.voided).length,
+    received: tags.filter((x) => x.targetTeamId === t.id && !x.voided).length,
+  }));
+
+  const landmarkDetails = landmarks.map((l) => {
+    const st = states.find((s) => s.landmarkId === l.id);
+    const challenge = st?.teamId ? store.getChallengeAttempt(game.id, l.id, st.teamId) : null;
+    return {
+      id: l.id,
+      name: l.name,
+      mapLandmarkIndex: l.mapLandmarkIndex,
+      status: st ? (st.locked ? 'locked' : 'claimed') : 'unclaimed',
+      teamId: st?.teamId ?? null,
+      teamName: st?.teamId ? teamName[st.teamId] ?? null : null,
+      claimedAt: st?.claimedAt ?? null,
+      challenge: challenge
+        ? { outcome: challenge.outcome, teamId: challenge.teamId, createdAt: challenge.createdAt }
+        : null,
+    };
+  });
+
+  res.json({
+    winner: {
+      id: result.winnerId,
+      isTie: result.isTie,
+      name: result.winnerId ? teamName[result.winnerId] ?? null : null,
+      color: result.winnerId ? teamColor[result.winnerId] ?? null : null,
+    },
+    scores,
+    tags: tagsByTeam,
+    landmarks: landmarkDetails,
+  });
+});
+
 // Scoreboard & log
 router.get('/games/:id/scoreboard', (req, res) => {
   const game = store.getGame(p(req.params.id));
