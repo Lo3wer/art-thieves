@@ -197,17 +197,16 @@ export default function ClaimScreen() {
   if (phase === 'camera') {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView ref={cameraRef} style={styles.camera} facing="front">
-          <View style={styles.cameraOverlay}>
-            <Text style={styles.cameraHint}>Take a selfie with the landmark</Text>
-            <TouchableOpacity style={styles.snapButton} onPress={handleSnap}>
-              <View style={styles.snapInner} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={reset}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </CameraView>
+        <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+        <View style={styles.cameraOverlay} pointerEvents="box-none">
+          <Text style={styles.cameraHint}>Take a selfie with the landmark</Text>
+          <TouchableOpacity style={styles.snapButton} onPress={handleSnap}>
+            <View style={styles.snapInner} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelButton} onPress={reset}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -411,7 +410,8 @@ const styles = StyleSheet.create({
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
   cameraOverlay: {
-    flex: 1, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 60,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 60,
   },
   cameraHint: { color: '#fff', fontSize: 16, marginBottom: 24, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   snapButton: { width: 72, height: 72, borderRadius: 36, borderWidth: 4, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },

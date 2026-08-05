@@ -5,6 +5,7 @@ import {
 import { Map, Camera, Marker, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
@@ -228,11 +229,10 @@ export default function MapScreen() {
 
         {game.landmarks.map((lm) => {
           const state = getLandmarkState(lm.id);
+          const ownedTeamId = state?.teamId;
           const color = state.status === 'unclaimed'
             ? '#999'
-            : state.status === 'locked'
-            ? '#888'
-            : getTeamColor(state.teamId);
+            : getTeamColor(ownedTeamId);
 
           return (
             <Marker
@@ -241,13 +241,22 @@ export default function MapScreen() {
               lngLat={[lm.longitude, lm.latitude]}
               onPress={() => handleMarkerPress(lm)}
             >
-              <View
-                style={[
-                  styles.marker,
-                  { backgroundColor: color },
-                  state.status === 'locked' && styles.markerLocked,
-                ]}
-              />
+              {state.status === 'unclaimed' ? (
+                <View style={[styles.marker, { backgroundColor: color }]} />
+              ) : (
+                <View
+                  style={[
+                    styles.lockMarker,
+                    state.status === 'locked' && styles.lockMarkerLocked,
+                  ]}
+                >
+                  <MaterialIcons
+                    name={state.status === 'locked' ? 'lock' : 'lock-open'}
+                    size={22}
+                    color={color}
+                  />
+                </View>
+              )}
             </Marker>
           );
         })}
@@ -262,8 +271,8 @@ export default function MapScreen() {
               lngLat={[loc.longitude, loc.latitude]}
               onPress={() => handleTeamMarkerPress(loc.teamId)}
             >
-              <View style={[styles.teamMarkerOuter, isSelected && styles.teamMarkerSelected]}>
-                <View style={[styles.teamMarkerInner, { backgroundColor: color }]} />
+              <View style={[styles.personMarker, isSelected && styles.personMarkerSelected]}>
+                <MaterialIcons name="person" size={26} color={color} />
               </View>
             </Marker>
           );
@@ -355,17 +364,21 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     elevation: 2,
   },
-  markerLocked: {
-    opacity: 0.6,
-  },
-  teamMarkerOuter: {
-    width: 24,
-    height: 24,
-    transform: [{ rotate: '45deg' }],
-    borderRadius: 3,
+  lockMarker: {
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2.5,
+    padding: 2,
+  },
+  lockMarkerLocked: {
+    opacity: 0.55,
+  },
+  personMarker: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 2,
     borderColor: '#fff',
     elevation: 4,
     shadowColor: '#000',
@@ -373,16 +386,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
   },
-  teamMarkerSelected: {
+  personMarkerSelected: {
     borderColor: '#1a1a2e',
     borderWidth: 3,
-  },
-  teamMarkerInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-    opacity: 0.9,
   },
   detailPanel: {
     position: 'absolute', bottom: 20, left: 16, right: 16,
