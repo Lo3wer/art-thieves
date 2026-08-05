@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator, FlatList,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api } from '../services/api';
@@ -19,8 +19,10 @@ export default function ClaimScreen() {
   const updateLandmarkState = useGameStore((s) => s.updateLandmarkState);
   const ownLocation = useLocationStore((s) => s.ownLocation);
   const myTeamId = useTeamStore((s) => s.myTeamId);
+  const myTeamColor = useTeamStore((s) => s.myTeamColor);
   const isFrozen = useTeamStore((s) => s.isFrozen);
 
+  const [activeTab, setActiveTab] = useState<'nearby' | 'owned'>('nearby');
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [photo, setPhoto] = useState<string | null>(null);
@@ -57,6 +59,23 @@ export default function ClaimScreen() {
     },
     [game]
   );
+
+  const myOwnedLandmarks = useMemo(() => {
+    if (!game || !myTeamId) return [];
+    const states = game.landmarkStates.filter((s) => s.teamId === myTeamId);
+    const stateMap = new Map(states.map((s) => [s.landmarkId, s]));
+    return game.landmarks
+      .filter((lm) => {
+        const s = stateMap.get(lm.id);
+        return s && (s.status === 'claimed' || s.status === 'locked');
+      })
+      .map((lm) => ({
+        id: lm.id,
+        name: lm.name,
+        challengeText: lm.challengeText,
+        status: stateMap.get(lm.id)!.status,
+      }));
+  }, [game, myTeamId]);
 
   const handleTakePhoto = async () => {
     if (!permission?.granted) {
@@ -175,26 +194,6 @@ export default function ClaimScreen() {
     ? game.teams.find((t) => t.id === state?.teamId)
     : null;
 
-  if (!ownLocation || !lm) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.inactiveIcon}>📌</Text>
-        <Text style={styles.inactiveTitle}>Move Closer</Text>
-        <Text style={styles.inactiveSub}>Walk near a landmark on the map to claim it</Text>
-      </View>
-    );
-  }
-
-  if (state?.status === 'locked') {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.inactiveIcon}>🔒</Text>
-        <Text style={styles.inactiveTitle}>Locked</Text>
-        <Text style={styles.inactiveSub}>This landmark is locked and cannot be claimed</Text>
-      </View>
-    );
-  }
-
   if (phase === 'camera') {
     return (
       <View style={styles.cameraContainer}>
@@ -251,7 +250,7 @@ export default function ClaimScreen() {
     );
   }
 
-  if (phase === 'challenge') {
+  if (phase === 'challenge' && lm) {
     return (
       <View style={styles.centered}>
         <Text style={styles.sectionTitle}>Challenge</Text>
@@ -301,28 +300,108 @@ export default function ClaimScreen() {
   }
 
   return (
-    <View style={styles.centered}>
+    <View style={styles.container}>
       <FrozenBar />
-      <Text style={styles.sectionTitle}>{lm.name}</Text>
-      {state && (
-        <Text style={styles.statusText}>
-          {state.status === 'unclaimed'
-            ? 'Unclaimed'
-            : `Owned by ${owner?.name ?? 'Unknown'}`}
-        </Text>
+
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'nearby' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('nearby')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'nearby' && styles.tabButtonTextActive]}>
+            Nearby
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'owned' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('owned')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'owned' && styles.tabButtonTextActive]}>
+            My Landmarks ({myOwnedLandmarks.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'owned' ? (
+        <View style={styles.container}>
+          {myOwnedLandmarks.length === 0 ? (
+            <View style={styles.centered}>
+              <Text style={styles.inactiveIcon}>🏆</Text>
+              <Text style={styles.inactiveTitle}>No Claimed Landmarks Yet</Text>
+              <Text style={styles.inactiveSub}>Claim landmarks here to see them in your collection.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={myOwnedLandmarks}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item }) => {
+                const isLocked = item.status === 'locked';
+                return (
+                  <View style={[styles.ownedRow, isLocked && styles.ownedRowLocked]}>
+                    <View
+                      style={[styles.ownedStatusBar, { backgroundColor: isLocked ? '#888' : myTeamColor ?? '#3498db' }]}
+                    />
+                    <View style={styles.ownedInfo}>
+                      <Text style={styles.ownedName}>{item.name}</Text>
+                      <Text style={[styles.ownedStatus, isLocked && styles.ownedStatusLocked]}>
+                        {isLocked ? '🔒 Locked' : 'Claimed'}
+                      </Text>
+                      {!isLocked && item.challengeText && (
+                        <Text style={styles.ownedHint}>Complete the challenge to lock this landmark</Text>
+                      )}
+                      {isLocked && (
+                        <Text style={styles.ownedHint}>Locked and safe from being stolen</Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          )}
+        </View>
+      ) : game?.status === 'paused' ? (
+        <View style={styles.centered}>
+          <Text style={styles.inactiveIcon}>⏸️</Text>
+          <Text style={styles.inactiveTitle}>Game Paused</Text>
+          <Text style={styles.inactiveSub}>Claiming is disabled while the game is paused.</Text>
+        </View>
+      ) : !lm ? (
+        <View style={styles.centered}>
+          <Text style={styles.inactiveIcon}>📌</Text>
+          <Text style={styles.inactiveTitle}>Move Closer</Text>
+          <Text style={styles.inactiveSub}>Walk near a landmark on the map to claim it</Text>
+        </View>
+      ) : state?.status === 'locked' ? (
+        <View style={styles.centered}>
+          <Text style={styles.inactiveIcon}>🔒</Text>
+          <Text style={styles.inactiveTitle}>{lm.name}</Text>
+          <Text style={styles.inactiveSub}>This landmark is already locked and cannot be claimed.</Text>
+        </View>
+      ) : (
+        <View style={styles.centered}>
+          <Text style={styles.sectionTitle}>{lm.name}</Text>
+          {state && (
+            <Text style={styles.statusText}>
+              {state.status === 'unclaimed'
+                ? 'Unclaimed'
+                : `Owned by ${owner?.name ?? 'Unknown'}`}
+            </Text>
+          )}
+          {lm.challengeText && (
+            <Text style={styles.challengePreview}>Challenge available after claiming</Text>
+          )}
+          <TouchableOpacity
+            style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+            onPress={handleTakePhoto}
+            disabled={isFrozen}
+          >
+            <Text style={styles.buttonText}>
+              {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
-      {lm.challengeText && (
-        <Text style={styles.challengePreview}>Challenge available after claiming</Text>
-      )}
-      <TouchableOpacity
-        style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
-        onPress={handleTakePhoto}
-        disabled={isFrozen}
-      >
-        <Text style={styles.buttonText}>
-          {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -368,4 +447,25 @@ const styles = StyleSheet.create({
   attemptedText: { fontSize: 14, color: '#888', fontStyle: 'italic', marginTop: 12 },
   resultIcon: { fontSize: 48, marginBottom: 12 },
   resultSub: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 8 },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  tabBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingVertical: 12 },
+  tabButton: {
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#e0e0e0',
+  },
+  tabButtonActive: { backgroundColor: '#1a1a2e', borderColor: '#1a1a2e' },
+  tabButtonText: { fontSize: 15, fontWeight: '600', color: '#666' },
+  tabButtonTextActive: { color: '#fff' },
+  listContent: { paddingHorizontal: 20, paddingBottom: 24 },
+  ownedRow: {
+    flexDirection: 'row', backgroundColor: '#fff', borderRadius: 10, marginBottom: 8,
+    overflow: 'hidden', elevation: 1,
+  },
+  ownedRowLocked: { backgroundColor: '#ececec', opacity: 0.9 },
+  ownedStatusBar: { width: 6 },
+  ownedInfo: { flex: 1, padding: 14 },
+  ownedName: { fontSize: 16, fontWeight: '600', color: '#1a1a2e' },
+  ownedStatus: { fontSize: 14, fontWeight: '700', color: '#3498db', marginTop: 2 },
+  ownedStatusLocked: { color: '#888' },
+  ownedHint: { fontSize: 12, color: '#888', marginTop: 4, fontStyle: 'italic' },
 });
