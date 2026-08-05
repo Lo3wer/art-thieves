@@ -27,7 +27,7 @@ export default function SummaryScreen() {
   const game = useGameStore((s) => s.game);
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<SummaryView>('landmarks');
+  const [view, setView] = useState<SummaryView>('teams');
 
   const clearGame = useGameStore((s) => s.clearGame);
   const clearTeam = useTeamStore((s) => s.clear);
