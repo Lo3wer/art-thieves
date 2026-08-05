@@ -419,7 +419,7 @@ export default function LobbyScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Vancouver Art Thieves</Text>
+      <Text style={styles.title}>Art Thieves</Text>
       <Text style={styles.subtitle}>Compete to claim art landmarks across the city!</Text>
       <View style={styles.homeButtons}>
         <TouchableOpacity

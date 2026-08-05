@@ -1,6 +1,6 @@
 # Environment Variables
 
-Central reference for every environment variable used in the Vancouver Art Thieves monorepo.
+Central reference for every environment variable used in the Art Thieves monorepo.
 
 There are **two independent environments** — the **app** (Expo / React Native client) and the
 **server** (Node.js + Express + Socket.IO backend). Each reads its **own** `.env` file; they do not share one.

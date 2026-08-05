@@ -1,4 +1,4 @@
-# Vancouver Art Thieves
+# Art Thieves
 
 Multiplayer location-based tag game built with Expo (React Native) and a Node.js/Socket.IO server.
 

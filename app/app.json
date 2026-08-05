@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Vancouver Art Thieves",
-    "slug": "vancouver-art-thieves",
+    "name": "Art Thieves",
+    "slug": "art-thieves",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,7 +17,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.leozhang226.vancouverartthieves"
+      "package": "com.leozhang226.artthieves"
     },
     "web": {
       "favicon": "./assets/favicon.png"
