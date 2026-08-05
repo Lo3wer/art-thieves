@@ -1,7 +1,8 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useGameStore } from '../stores/useGameStore';
+import { useTeamStore } from '../stores/useTeamStore';
 import LobbyScreen from '../screens/LobbyScreen';
 import GameScreen from '../screens/GameScreen';
 import MapScreen from '../screens/MapScreen';
@@ -11,28 +12,34 @@ import LogScreen from '../screens/LogScreen';
 
 const Tab = createBottomTabNavigator();
 
-const TAB_ICONS: Record<string, string> = {
-  Lobby: '🏠',
-  Game: '🏆',
-  Map: '🗺️',
-  Claim: '📸',
-  Tag: '🏷️',
-  Log: '📋',
+const TAB_ICONS: Record<string, React.ComponentProps<typeof MaterialIcons>['name']> = {
+  Lobby: 'home',
+  Game: 'emoji-events',
+  Map: 'map',
+  Claim: 'photo-camera',
+  Tag: 'label',
+  Log: 'receipt-long',
 };
 
 export default function AppNavigator() {
   const game = useGameStore((s) => s.game);
+  const myTeamColor = useTeamStore((s) => s.myTeamColor);
+  const teamColor = myTeamColor ?? '#1a1a2e';
   const hasActiveGame = game !== null && game.status !== 'ended' && game.status !== 'lobby';
 
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: () => (
-            <Text style={{ fontSize: 20 }}>{TAB_ICONS[route.name] ?? '•'}</Text>
+          tabBarIcon: ({ focused }) => (
+            <MaterialIcons
+              name={TAB_ICONS[route.name] ?? 'circle'}
+              size={24}
+              color={focused ? teamColor : `${teamColor}88`}
+            />
           ),
-          tabBarActiveTintColor: '#1a1a2e',
-          tabBarInactiveTintColor: '#999',
+          tabBarActiveTintColor: teamColor,
+          tabBarInactiveTintColor: '#888',
           headerShown: false,
         })}
       >
