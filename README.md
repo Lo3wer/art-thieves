@@ -62,6 +62,20 @@ npx expo run:android --device
 - `server/` — Express + Socket.IO backend with in-memory data store
 - `app/` — Expo React Native app with Zustand stores, MapLibre maps, and Socket.IO client
 
+### Physical device
+
+Set `EXPO_PUBLIC_API_URL` in `app/.env` to your computer's LAN IP on port 3001, start the server, then:
+
+```sh
+cd app
+npx expo run:android --device
+```
+
 ## Configuration
+
+All environment variables for the **app** (`app/.env`) and the **server** (`server/.env`)
+are documented in **[ENV.md](ENV.md)** — including persistence mode (`PERSIST`), the database
+path, the API base URL, and the map style. Templates with every option live in
+`app/.env.example` and `server/.env.example`.
 
 Game settings (duration, vicinity radius, no-tag grace period, etc.) are configurable by the host when creating a game.
