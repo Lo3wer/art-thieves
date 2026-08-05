@@ -27,6 +27,8 @@ export const useLocationStore = create<LocationStore>((set) => ({
     }),
   updateTeamLocation: (ping) =>
     set((s) => {
+      const myTeamId = useTeamStore.getState().myTeamId;
+      if (ping.teamId === myTeamId) return s;
       const filtered = s.teamLocations.filter((t) => t.teamId !== ping.teamId);
       return { teamLocations: [...filtered, ping] };
     }),
