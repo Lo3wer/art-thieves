@@ -14,6 +14,10 @@ export function setIO(instance: Server): void {
   io = instance;
 }
 
+function cloneState(state: any): any {
+  return JSON.parse(JSON.stringify(state));
+}
+
 function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {
   if (!io) return null;
   const game = store.getGame(gameId);
@@ -32,13 +36,13 @@ function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | n
 export function sendFullState(gameId: string): void {
   const r = room(gameId);
   if (!r) return;
-  lastSnapshots[gameId] = { game: r.state };
+  lastSnapshots[gameId] = { game: cloneState(r.state) };
   r.nsp.to(`game:${gameId}`).emit('state_update', { game: r.state });
 }
 
 export function seedSnapshot(gameId: string): void {
   const r = room(gameId);
-  if (r) lastSnapshots[gameId] = { game: r.state };
+  if (r) lastSnapshots[gameId] = { game: cloneState(r.state) };
 }
 
 function diffLandmarkStates(prev: any[] | undefined, curr: any[] | undefined): any[] {
@@ -89,7 +93,7 @@ export function broadcastState(gameId: string): void {
 
   if (Object.keys(diff).length === 0) return;
 
-  lastSnapshots[gameId] = { game: region };
+  lastSnapshots[gameId] = { game: cloneState(region) };
   r.nsp.to(`game:${gameId}`).emit('state_update', { diff });
 }
 
