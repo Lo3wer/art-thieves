@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -9,6 +10,21 @@ const DB_PATH = process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'v
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? path.join(process.cwd(), 'drizzle');
 
 let dbInstance: BetterSQLite3Database<typeof schema> | null = null;
+let uploadsPath: string | null = null;
+
+export function isPersistent(): boolean {
+  if (process.env.DB_IN_MEMORY === '1') return false;
+  return (process.env.PERSIST ?? 'true').toLowerCase() !== 'false';
+}
+
+export function getUploadsDir(): string {
+  if (!uploadsPath) {
+    uploadsPath = isPersistent()
+      ? path.join(process.cwd(), 'uploads')
+      : fs.mkdtempSync(path.join(os.tmpdir(), 'vat-uploads-'));
+  }
+  return uploadsPath;
+}
 
 export function getDbPath(): string {
   return DB_PATH;

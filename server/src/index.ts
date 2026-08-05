@@ -7,10 +7,11 @@ import { errorHandler } from './middleware/errorHandler';
 import routes from './routes';
 import { registerGameHandlers } from './socket/handlers';
 import { setIO } from './socket/broadcast';
-import { initDb } from './data/db';
-import { uploadsRootDir } from './middleware/upload';
+import { initDb, isPersistent, getUploadsDir } from './data/db';
 
-initDb();
+if (isPersistent()) {
+  initDb();
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -22,7 +23,7 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(uploadsRootDir));
+app.use('/uploads', express.static(getUploadsDir()));
 
 app.use('/api', routes);
 

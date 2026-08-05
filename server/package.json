@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:memory": "node -e \"process.env.PERSIST='false';require('child_process').spawn('npx',['tsx','watch','src/index.ts'],{stdio:'inherit',shell:true})\"",
     "build": "tsc",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",

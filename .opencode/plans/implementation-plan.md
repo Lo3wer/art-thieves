@@ -371,9 +371,19 @@ itself — everything that worked in Part 2 still works.
 - Seed: insert Vancouver Downtown map on first run.
 - Update `server/.gitignore` — ignore `server/data/*.db*` (and per the exchange, DB files) and `server/uploads/`.
 
+### Run modes (env switch)
+| Env | Effect |
+|---|---|
+| `PERSIST` (default `true`) | `false` (or `DB_IN_MEMORY=1`) runs the server with an **in-memory store** — no SQLite DB, no `uploads/` dir (photos go to a temp dir). Everything is ephemeral and lost on restart. Same API, so no client changes. |
+| `DATABASE_PATH` | Override the SQLite file path (default `data/vat.db`). |
+| `MIGRATIONS_DIR` | Override the drizzle migrations folder (default `server/drizzle`). |
+
+Run in-memory mode with `npm run dev:memory` (Windows PowerShell: `$env:PERSIST='false'; npm run dev`).
+
 **Verify:**
-- Server boots, tables are created, Vancouver map seeded.
+- Server boots, tables are created, Vancouver map is seeded.
 - `npm run db:generate`/migrate produce the schema with no errors.
+- With `PERSIST=false`, no `data/*.db*` or `uploads/` files are created, and data is gone after restart.
 
 ---
 

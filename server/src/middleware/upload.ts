@@ -2,15 +2,14 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { AppError } from './errorHandler';
+import { getUploadsDir } from '../data/db';
 
 const ALLOWED = ['image/jpeg', 'image/png'];
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export function gameUploadsDir(gameId: string): string {
-  return path.join(process.cwd(), 'uploads', gameId);
+  return path.join(getUploadsDir(), gameId);
 }
-
-export const uploadsRootDir = path.join(process.cwd(), 'uploads');
 
 export const photoUpload = multer({
   storage: multer.diskStorage({
