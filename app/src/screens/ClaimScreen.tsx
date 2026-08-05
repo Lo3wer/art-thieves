@@ -222,11 +222,19 @@ export default function ClaimScreen() {
       <View style={styles.centered}>
         <Text style={styles.sectionTitle}>Preview Selfie</Text>
         {photo && <Image source={{ uri: photo }} style={styles.previewImage} />}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setPhase('camera')}>
-            <Text style={styles.secondaryButtonText}>Retake</Text>
+        <View style={styles.previewButtonRow}>
+          <TouchableOpacity
+            style={[styles.retakeButton, loading && styles.buttonDisabled]}
+            onPress={() => setPhase('camera')}
+            disabled={loading}
+          >
+            <Text style={styles.retakeButtonText}>Retake</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleConfirmClaim} disabled={loading}>
+          <TouchableOpacity
+            style={[styles.confirmButton, loading && styles.buttonDisabled]}
+            onPress={handleConfirmClaim}
+            disabled={loading}
+          >
             <Text style={styles.buttonText}>{loading ? '...' : 'Confirm'}</Text>
           </TouchableOpacity>
         </View>
@@ -432,7 +440,17 @@ const styles = StyleSheet.create({
   cancelButton: { padding: 12 },
   cancelText: { color: '#fff', fontSize: 16 },
   previewImage: { width: 280, height: 360, borderRadius: 12, marginVertical: 16 },
-  buttonRow: { flexDirection: 'row', gap: 16, marginTop: 12 },
+  previewButtonRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 24 },
+  retakeButton: {
+    flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center',
+    justifyContent: 'center', backgroundColor: '#fff',
+    borderWidth: 1, borderColor: '#c8c8c8',
+  },
+  retakeButtonText: { color: '#1a1a2e', fontSize: 16, fontWeight: '600' },
+  confirmButton: {
+    flex: 1, backgroundColor: '#1a1a2e', paddingVertical: 14,
+    borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
   primaryButton: {
     backgroundColor: '#1a1a2e', paddingVertical: 14, paddingHorizontal: 32,
     borderRadius: 10, marginTop: 16,

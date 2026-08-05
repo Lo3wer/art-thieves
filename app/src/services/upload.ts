@@ -1,3 +1,5 @@
+import { fetch } from 'expo/fetch';
+import { File } from 'expo-file-system';
 import { API_BASE } from '../../api';
 import { useTeamStore } from '../stores/useTeamStore';
 
@@ -8,7 +10,7 @@ export async function uploadPhoto(
 ): Promise<{ photoId: string; url: string }> {
   const teamId = useTeamStore.getState().myTeamId ?? '';
   const form = new FormData();
-  form.append('photo', { uri, name: 'selfie.jpg', type: 'image/jpeg' } as any);
+  form.append('photo', new File(uri));
   form.append('teamId', teamId);
   form.append('landmarkId', landmarkId);
 
