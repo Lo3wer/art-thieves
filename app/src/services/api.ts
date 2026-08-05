@@ -1,4 +1,4 @@
-import type { Game, GameMap, Team, GameConfig, GameSummary } from '../types';
+import type { Game, GameMap, Team, GameConfig, GameSummary, LocationPing, Photo, GameTimeline } from '../types';
 import { API_BASE } from '../../api';
 import { useTeamStore } from '../stores/useTeamStore';
 
@@ -82,10 +82,16 @@ export const api = USE_MOCKS
         request<void>(`/api/games/${gameId}/resume`, { method: 'PUT' }),
       endGame: (gameId: string) =>
         request<{ winnerId: string | null; isTie: boolean }>(`/api/games/${gameId}/end`, { method: 'PUT' }),
-      claimLandmark: (gameId: string, landmarkId: string, latitude: number, longitude: number) =>
+      claimLandmark: (gameId: string, landmarkId: string, latitude: number, longitude: number, photoId?: string) =>
         request<void>(`/api/games/${gameId}/claim`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, teamId: getTeamId(), latitude, longitude }),
+          body: JSON.stringify({
+            landmarkId,
+            teamId: getTeamId(),
+            latitude,
+            longitude,
+            ...(photoId ? { photoId } : {}),
+          }),
         }),
       completeChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
@@ -128,4 +134,10 @@ export const api = USE_MOCKS
       getActiveTag: async (_gameId: string, _teamId: string) => null,
       getFrozenTeams: (gameId: string) =>
         request<{ teamId: string; frozenUntil: string }[]>(`/api/games/${gameId}/frozen-teams`),
+      getLocations: (gameId: string) =>
+        request<LocationPing[]>(`/api/games/${gameId}/locations`),
+      getPhotos: (gameId: string) =>
+        request<Photo[]>(`/api/games/${gameId}/photos`),
+      getTimeline: (gameId: string) =>
+        request<GameTimeline>(`/api/games/${gameId}/timeline`),
     };

@@ -1,6 +1,6 @@
 # Implementation Plan — Landmarks Game
 
-**Stack:** React Native (Expo SDK 57) · Express.js 5 · PostgreSQL · Socket.IO · Zustand · react-native-maps · Jest
+**Stack:** React Native (Expo SDK 57) · Express.js 5 · SQLite via Drizzle ORM (Postgres-ready) · Socket.IO · Zustand · react-native-maps · Jest
 
 ---
 
@@ -8,7 +8,7 @@
 
 1. **Part 1 — Full App (client with mocks):** Build every screen, component, store, and navigation. A mock service layer simulates all server responses so the entire app is navigable and testable without a backend.
 2. **Part 2 — Server Business Logic (in-memory):** Build the entire Express + Socket.IO server with an in-memory data store. Same behaviour as the final system, but no database dependency. The client switches from mocks to the real server.
-3. **Part 3 — Database Integration:** Replace the in-memory store with PostgreSQL. Add migrations, connection pooling, and schema queries. Everything else stays the same.
+3. **Part 3 — Data Persistence & Drives:** Replace the in-memory store with SQLite via Drizzle ORM (swappable to PostgreSQL). Persist all game records, store app selfies to disk (optional, linked to claims), and add read-APIs (`/locations`, `/timeline`, `/photos`) for a separate post-game reconstruction tool. Everything else stays the same.
 
 Verification steps at each part ensure you're never debugging client + server + DB at the same time.
 
@@ -339,103 +339,118 @@ Verification steps at each part ensure you're never debugging client + server + 
 
 ---
 
-## Part 3 — Database Integration
+## Part 3 — Data Persistence & Drives
 
-### Goal: Replace in-memory store with PostgreSQL. No behavioural changes — everything that worked in Part 2 still works.
+### Goal: Replace in-memory store with a relational DB (SQLite now, Postgres-ready) and persist
+photos + expose read-APIs for post-game reconstruction. No behavioural change to the game
+itself — everything that worked in Part 2 still works.
 
----
-
-### 3.1 — Database Setup
-
-- Add dependencies: `pg`
-- Add `config/db.ts`: PostgreSQL pool creation from `DATABASE_URL`
-- Create migration files (run on startup):
-  ```sql
-  -- 001_create_tables.sql
-  CREATE TABLE maps (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    center_lat DOUBLE PRECISION NOT NULL,
-    center_lng DOUBLE PRECISION NOT NULL,
-    default_zoom INT NOT NULL,
-    default_vicinity_radius INT NOT NULL,
-    win_threshold INT NOT NULL DEFAULT 20,
-    data JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-
-  CREATE TABLE games ( ... );
-  CREATE TABLE teams ( ... );
-  CREATE TABLE landmarks ( ... );
-  CREATE TABLE landmark_state ( ... );
-  CREATE TABLE challenge_attempts ( ... );
-  CREATE TABLE location_pings ( ... );
-  CREATE TABLE tag_events ( ... );
-  CREATE TABLE push_tokens (
-    id UUID PRIMARY KEY,
-    game_id UUID NOT NULL REFERENCES games(id),
-    team_id UUID NOT NULL REFERENCES teams(id),
-    token TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(game_id, team_id, token)
-  );
-  CREATE TABLE event_log ( ... );
-  ```
-- Seed script: insert Vancouver Downtown map on first run
-
-**Verify:**
-- Server connects to PostgreSQL
-- All tables created
-- Vancouver map seeded
+### Decisions (confirmed with owner)
+| Decision | Choice |
+|---|---|
+| Database (now) | **SQLite** via **Repository + Drizzle ORM** (`better-sqlite3`) |
+| Database (future) | **PostgreSQL / other relational** — swap Drizzle driver + connection + regenerate migrations; no repo/route changes |
+| Data access | Repository layer per collection; existing `store` becomes a facade over repositories (routes/socket handlers unchanged) |
+| Selfie storage | **Files on disk** under `server/uploads/<gameId>/`, path + metadata in DB, original quality (not downscaled), served via `express.static` |
+| Photo scope | Only app selfies; **optional**, linked to a claim when present (a claim works without a photo) |
+| Timeline access | Data stored server-side; a separate reconstruction tool reads the server read-APIs |
+| Upload transport | Multipart/form-data (multer), scoped only to the `/photos` route; everything else stays JSON |
 
 ---
 
-### 3.2 — Replace In-Memory Store with DB Queries
+### 3.1 — Database Setup (SQLite via Drizzle)
 
-- Create `src/models/` with query functions for each table:
-  - `MapModel` — insert, findAll, findById
-  - `GameModel` — create, findByJoinCode, findById, updateStatus, updateConfig
-  - `TeamModel` — create, findByGame
-  - `LandmarkModel` — bulkCreate (from map snapshot), findByGame
-  - `LandmarkStateModel` — upsert (claim, steal, lock), findByGame, findByTeam
-  - `ChallengeAttemptModel` — create, findByTeamAndLandmark
-  - `PushTokenModel` — register, findByGameAndTeam, remove (invalid token cleanup)
-  - `LocationPingModel` — create, findByGame
-  - `TagEventModel` — create, findActiveByTarget, updateDispute
-  - `EventLogModel` — insert, findByGame (paginated, filterable)
-- Models implement the same interface as the in-memory store, so route handlers and socket handlers don't change
-- Replace `data/store.ts` references with model calls
+- Add dependencies: `drizzle-orm`, `better-sqlite3`, `multer`; dev `@types/better-sqlite3`, `@types/multer`, `drizzle-kit`
+- Add `src/data/db.ts`: `better-sqlite3` connection, Drizzle client, and `migrate()` run on boot. **Only dialect-specific file** (swap later for Postgres).
+- Add `src/data/schema.ts` — Drizzle table definitions (all hold `text` UUID-ish ids, SQLite types):
+  - `maps`, `games`, `teams`, `landmarks`, `landmark_state`, `challenge_attempts`,
+    `location_pings`, `tag_events`, `push_tokens`, `event_log`, and
+  - `photos` — `id`, `game_id`, `team_id`, `landmark_id`, `filename`, `url`, `created_at`,
+    with an optional `photos.id` FK referenced by `landmark_state.claim_photo_id`.
+- Add `drizzle.config.ts` for `drizzle-kit` (SQLite driver), migrations generated under `server/drizzle/`.
+- Seed: insert Vancouver Downtown map on first run.
+- Update `server/.gitignore` — ignore `server/data/*.db*` (and per the exchange, DB files) and `server/uploads/`.
 
 **Verify:**
-- All endpoints still return correct results (run the same supertest suite)
-- All game logic unchanged (pure functions in `game/logic.ts` need no changes)
-- Data persists across server restart
+- Server boots, tables are created, Vancouver map seeded.
+- `npm run db:generate`/migrate produce the schema with no errors.
 
 ---
 
-### 3.3 — Location History & Query Performance
+### 3.2 — Replace In-Memory Store with Repositories
 
-- Add indexes: `location_pings(game_id, timestamp)`, `event_log(game_id, type)`, `landmark_state(game_id, landmark_id)`
-- Location pings now persisted to DB (was optional in-memory). This enables post-game route replay.
-- Verify query performance for 40 landmarks, 3 teams, 1000+ location pings
+- Create `src/data/repositories.ts` (one repo per table) + an exposed `Store` facade that
+  keeps the exact public API `store.ts` had:
+  - `MapRepo` — insert, findAll, findById
+  - `GameRepo` — create, findByJoinCode, findById, updateStatus, updateConfig
+  - `TeamRepo` — create, findByGame
+  - `LandmarkRepo` — bulkCreate (from map snapshot), findByGame
+  - `LandmarkStateRepo` — upsert (claim, steal, lock), findByGame, findByTeam
+  - `ChallengeAttemptRepo` — create, findByTeamAndLandmark
+  - `LocationPingRepo` — create, findByGame (and time-ordered, for replay)
+  - `TagEventRepo` — create, findActiveByTarget, updateDispute
+  - `PushTokenRepo` — register, findByGameAndTeam, remove (invalid token cleanup)
+  - `EventLogRepo` — insert, findByGame (paginated, filterable)
+  - `PhotoRepo` — create (with static URL), findById, findByGame
+- Route handlers and socket handlers keep calling `store.*`; only the implementation changes.
+- Add indexes: `location_pings(game_id, timestamp)`, `event_log(game_id, type)`, `landmark_state(game_id, landmark_id)`.
 
 **Verify:**
-- Location history query works
-- Post-game route data available (no dedicated UI yet, but data exists)
+- All endpoints still return correct results (same supertest suite).
+- All game logic unchanged (pure functions in `game/logic.ts` need no changes).
+- Data persists across server restart.
 
 ---
 
-### 3.4 — Final Test Pass
+### 3.3 — Selfie Photo Upload & Claim Linking
 
-- Run all server tests against PostgreSQL (test database, reset between runs)
-- Run all client tests (unchanged)
-- Full manual walkthrough on device
-- Verify data persists: start game → make claims → restart server → rejoin → state intact
+- Add `src/middleware/upload.ts`: multer disk storage to `server/uploads/<gameId>/`,
+  original quality, `image/jpeg`|`image/png`, 10MB cap.
+- Add route `POST /api/games/:id/photos` (multipart) → multer → `PhotoRepo.create` →
+  returns `{ photoUrl }` where `photoUrl = /uploads/<gameId>/<file>`.
+- Mount `express.static('/uploads')` in `src/index.ts` so files are publicly reachable.
+- Claim flow gains an **optional** `photoId`/`photoUrl`: if a selfie was uploaded and linked, the
+  claim's `landmark_state` and the emitted log entry carry `photoUrl`. Claims still succeed with no photo.
+- Expose `GET /api/games/:id/photos` → list this game's uploaded selfies.
 
 **Verify:**
-- `npm test` passes in both `app/` and `server/`
-- Full game flow works with persistent storage
-- Server restart doesn't lose game state
+- Upload writes a file and returns a reachable `/uploads/...` URL.
+- Claim works with and without a linked photo; log entry includes `photoUrl` when present.
+
+---
+
+### 3.4 — Read-APIs for Post-Game Reconstruction
+
+- `GET /api/games/:id/locations` → time-ordered `location_pings` for the game (already in 3.2).
+- `GET /api/games/:id/timeline` → `{ game, scores, events:[{ timestamp, type, teamId?, data?, photoUrl? }] }`
+  merging `event_log` (joined with any `photoUrl`) + `location_pings` + final scores/winner, chronological.
+- `GET /api/games/:id/photos` (3.3) rounds out the read surface a separate tool can consume.
+
+**Verify:**
+- `/locations` and `/timeline` return populated, time-ordered data.
+- `/photos` returns the game's selfies.
+
+---
+
+### 3.5 — Separate Reconstruction Tool (future / outline)
+
+A standalone app or CLI (e.g. `tools/game-lab/`, web or CLI) that consumes the 3.4 read-APIs and
+replays a game: animated map of team routes (from `location_pings`), claims/steals/locks, tags,
+per-landmark selfie gallery, score-over-time chart, JSON export. Built entirely on the read-APIs; no new schema.
+
+---
+
+### 3.6 — Final Test Pass
+
+- Run all server tests against SQLite (test database, reset between runs).
+- Run all client tests (unchanged).
+- Full manual walkthrough on device.
+- Verify data persists: start game → make claims → restart server → rejoin → state intact.
+
+**Verify:**
+- `npm test` passes in both `app/` and `server/`.
+- Full game flow works with persistent storage.
+- Server restart doesn't lose game state, photos, or logs.
 
 ---
 
@@ -443,7 +458,10 @@ Verification steps at each part ensure you're never debugging client + server + 
 
 | Decision | Choice |
 |---|---|
-| Database | PostgreSQL (added last via model layer) |
+| Database | SQLite via Drizzle ORM (`better-sqlite3`), swappable to PostgreSQL (driver + migrations only) |
+| Data access | Repository layer per collection; `store` facade over repositories |
+| Selfie storage | Files on disk under `server/uploads/<gameId>/`, optional, linked to claims via `photos` table + `photoUrl` |
+| Reconstruction | Separate tool consumes read-APIs (`/locations`, `/timeline`, `/photos`, `/log`) |
 | Client state | Zustand |
 | Real-time | Socket.IO |
 | Maps library | react-native-maps |
@@ -455,6 +473,6 @@ Verification steps at each part ensure you're never debugging client + server + 
 | Server testing | Jest + supertest + socket.io-client |
 | Client testing | Jest + @testing-library/react-native |
 | Mock strategy | Shared TypeScript interfaces, flag-gated real vs mock service layer |
-| In-memory → DB | Data access layer with swappable implementation (in-memory for Part 2, SQL for Part 3) |
+| In-memory → DB | Data access layer with swappable implementation (in-memory for Part 2, SQLite/Drizzle for Part 3, Postgres-ready) |
 | Project structure | Feature-based (server: layered; client: screens/components/stores/services) |
 | TypeScript | Strict mode in both projects |

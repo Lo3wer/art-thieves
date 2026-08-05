@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api } from '../services/api';
+import { uploadPhoto } from '../services/upload';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
@@ -114,7 +115,12 @@ export default function ClaimScreen() {
 
     setLoading(true);
     try {
-      await api.claimLandmark(game.id, lm.id, ownLocation!.latitude, ownLocation!.longitude);
+      let photoId: string | undefined;
+      if (photo) {
+        const uploaded = await uploadPhoto(game.id, lm.id, photo);
+        photoId = uploaded.photoId;
+      }
+      await api.claimLandmark(game.id, lm.id, ownLocation!.latitude, ownLocation!.longitude, photoId);
       updateLandmarkState({
         landmarkId: lm.id,
         status: 'claimed',
@@ -399,6 +405,13 @@ export default function ClaimScreen() {
               {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
             </Text>
           </TouchableOpacity>
+          {!isFrozen && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleConfirmClaim}>
+              <Text style={styles.secondaryButtonText}>
+                {isSteal ? 'Steal Without Photo' : 'Claim Without Photo'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>

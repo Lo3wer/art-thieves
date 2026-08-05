@@ -11,9 +11,11 @@ import {
   tagSchema,
   pushTokenSchema,
   configUpdateSchema,
+  photoMetadataSchema,
 } from '../middleware/validation';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
+import { photoUpload } from '../middleware/upload';
 
 const FREEZE_DURATION_MS = 10 * 60 * 1000;
 
@@ -250,9 +252,17 @@ router.post('/games/:id/claim', validate(claimSchema), (req, res) => {
   if (existing?.teamId === teamId) throw new AppError(400, 'Already claimed by your team');
 
   const isSteal = existing?.teamId != null && existing.teamId !== teamId;
-  store.upsertLandmarkState(game.id, landmarkId, teamId, false);
+  let photo: { id: string; url: string } | null = null;
+  if (req.body.photoId) {
+    const p = store.getPhoto(req.body.photoId);
+    if (p?.gameId !== game.id) throw new AppError(400, 'Invalid photo for this game');
+    photo = { id: p.id, url: p.url };
+  }
+  store.upsertLandmarkState(game.id, landmarkId, teamId, false, photo?.id);
   store.addLogEntry(game.id, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
+    latitude, longitude,
+    ...(photo ? { photoId: photo.id, photoUrl: photo.url } : {}),
   });
   checkWinAndEnd(game.id);
   broadcastState(game.id);
@@ -425,6 +435,82 @@ router.get('/games/:id/log', (req, res) => {
   const teamId = req.query.teamId as string | undefined;
   const entries = store.getLog(game.id, teamId);
   res.json(entries);
+});
+
+// Photos
+router.post(
+  '/games/:id/photos',
+  photoUpload.single('photo'),
+  validate(photoMetadataSchema),
+  (req, res) => {
+    const game = store.getGame(p(req.params.id));
+    if (!game) throw new AppError(404, 'Game not found');
+    if (!req.file) throw new AppError(400, 'No file uploaded');
+    const { teamId, landmarkId } = req.body;
+    const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+    if (!landmark) throw new AppError(404, 'Landmark not found');
+    const url = `/uploads/${game.id}/${req.file.filename}`;
+    const photo = store.addPhoto({ gameId: game.id, teamId, landmarkId, filename: req.file.filename, url });
+    res.status(201).json({ photoId: photo.id, url });
+  }
+);
+
+router.get('/games/:id/photos', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  res.json(store.getPhotosByGame(game.id));
+});
+
+// Locations (post-game route replay)
+router.get('/games/:id/locations', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  res.json(store.getLocationPings(game.id));
+});
+
+// Timeline (for post-game reconstruction tooling)
+router.get('/games/:id/timeline', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const teams = store.getTeamsByGame(game.id);
+  const states = store.getLandmarkStates(game.id);
+  const scores = computeScoreboard(teams, states);
+  const result = computeWinner(scores);
+
+  const log = store.getLog(game.id);
+  const events = [...log]
+    .reverse()
+    .map((entry) => {
+      const data = (entry.data ?? {}) as Record<string, unknown>;
+      return {
+        timestamp: entry.timestamp,
+        type: entry.type,
+        teamId:
+          (data.teamId as string | undefined) ??
+          (data.taggerTeamId as string | undefined) ??
+          (data.targetTeamId as string | undefined),
+        data,
+        photoUrl: data.photoUrl as string | undefined,
+      };
+    });
+
+  res.json({
+    game: {
+      id: game.id,
+      joinCode: game.joinCode,
+      status: game.status,
+      createdAt: game.createdAt,
+    },
+    scores,
+    winner: { id: result.winnerId, isTie: result.isTie },
+    locations: store.getLocationPings(game.id).map((l) => ({
+      teamId: l.teamId,
+      latitude: l.latitude,
+      longitude: l.longitude,
+      timestamp: l.timestamp,
+    })),
+    events,
+  });
 });
 
 export default router;

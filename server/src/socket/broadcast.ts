@@ -50,7 +50,7 @@ function diffLandmarkStates(prev: any[] | undefined, curr: any[] | undefined): a
   const changed: any[] = [];
   for (const s of curr ?? []) {
     const p = prevMap.get(s.landmarkId);
-    if (!p || p.teamId !== s.teamId || p.locked !== s.locked || p.claimedAt !== s.claimedAt) {
+    if (!p || p.teamId !== s.teamId || p.locked !== s.locked || p.claimedAt !== s.claimedAt || p.claimPhotoId !== s.claimPhotoId) {
       changed.push(s);
     }
   }

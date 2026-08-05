@@ -48,6 +48,12 @@ export const claimSchema = z.object({
   teamId: z.string().uuid(),
   latitude: z.number(),
   longitude: z.number(),
+  photoId: z.string().uuid().optional(),
+});
+
+export const photoMetadataSchema = z.object({
+  teamId: z.string().uuid(),
+  landmarkId: z.string().uuid(),
 });
 
 export const challengeSchema = z.object({

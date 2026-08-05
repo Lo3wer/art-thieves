@@ -112,3 +112,29 @@ export interface GameSummary {
   tags: { teamId: string; given: number; received: number }[];
   landmarks: GameSummaryLandmark[];
 }
+
+export interface Photo {
+  id: string;
+  gameId: string;
+  teamId: string;
+  landmarkId: string;
+  filename: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface TimelineEvent {
+  timestamp: string;
+  type: string;
+  teamId?: string;
+  data: Record<string, unknown>;
+  photoUrl?: string;
+}
+
+export interface GameTimeline {
+  game: { id: string; joinCode: string; status: GameStatus; createdAt: string };
+  scores: GameSummary['scores'];
+  winner: { id: string | null; isTie: boolean };
+  locations: LocationPing[];
+  events: TimelineEvent[];
+}
