@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef } from '@maplibre/maplibre-react-native';
+import { Map, Camera, Marker, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -149,12 +148,11 @@ export default function MapScreen() {
     [game]
   );
 
-  const cameraRef = useRef<CameraRef>(null);
+  const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const centeredRef = useRef(false);
-  const mapReadyRef = useRef(false);
 
   const centerOnOwnTeam = useCallback(() => {
-    if (centeredRef.current || !mapReadyRef.current) return;
+    if (centeredRef.current) return;
     const ownTeamLoc = teamLocations.find((l) => l.teamId === myTeamId);
     let lat = ownLocation?.latitude;
     let lng = ownLocation?.longitude;
@@ -164,22 +162,12 @@ export default function MapScreen() {
     }
     if (lat == null || lng == null) return;
     centeredRef.current = true;
-    cameraRef.current?.flyTo({
-      center: [lng, lat],
-      duration: 800,
-    });
+    setCameraCenter([lng, lat]);
   }, [ownLocation, myTeamId, teamLocations]);
 
   useEffect(() => {
     centerOnOwnTeam();
   }, [centerOnOwnTeam]);
-
-  useFocusEffect(
-    useCallback(() => {
-      centeredRef.current = false;
-      centerOnOwnTeam();
-    }, [centerOnOwnTeam])
-  );
 
   const handleMarkerPress = (landmark: Landmark) => {
     setSelectedLandmark(landmark);
@@ -231,20 +219,14 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <Map
-        style={styles.map}
-        mapStyle={MAP_STYLE}
-        onDidFinishRenderingMap={() => {
-          mapReadyRef.current = true;
-          centerOnOwnTeam();
-        }}
-      >
+      <Map style={styles.map} mapStyle={MAP_STYLE}>
         <Camera
-          ref={cameraRef}
           initialViewState={{
             center: [-123.1207, 49.2827],
             zoom: 14,
           }}
+          center={cameraCenter ?? undefined}
+          duration={800}
         />
 
         <GeoJSONSource
