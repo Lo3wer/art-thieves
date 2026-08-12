@@ -1,5 +1,6 @@
 import type { Server } from 'socket.io';
 import { store } from '../data/store';
+import { decorateLandmarkStates } from '../game/challenges';
 
 let io: Server | null = null;
 
@@ -28,7 +29,8 @@ function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | n
       ...game,
       teams: store.getTeamsByGame(gameId),
       landmarks: store.getLandmarksByGame(gameId),
-      landmarkStates: store.getLandmarkStates(gameId),
+      landmarkStates: decorateLandmarkStates(gameId),
+      penalties: store.getPenaltiesByGame(gameId),
     },
   };
 }
@@ -50,7 +52,16 @@ function diffLandmarkStates(prev: any[] | undefined, curr: any[] | undefined): a
   const changed: any[] = [];
   for (const s of curr ?? []) {
     const p = prevMap.get(s.landmarkId);
-    if (!p || p.teamId !== s.teamId || p.locked !== s.locked || p.claimedAt !== s.claimedAt || p.claimPhotoId !== s.claimPhotoId) {
+    const chSame =
+      p && JSON.stringify(p.challenge ?? null) === JSON.stringify(s.challenge ?? null);
+    if (
+      !p ||
+      p.teamId !== s.teamId ||
+      p.locked !== s.locked ||
+      p.claimedAt !== s.claimedAt ||
+      p.claimPhotoId !== s.claimPhotoId ||
+      !chSame
+    ) {
       changed.push(s);
     }
   }
@@ -84,6 +95,12 @@ export function broadcastState(gameId: string): void {
 
   const changedStates = diffLandmarkStates(prev.landmarkStates, region.landmarkStates);
   if (changedStates.length) diff.landmarkStates = changedStates;
+
+  if (prev.penalties && region.penalties) {
+    const prevPen = JSON.stringify(prev.penalties);
+    const curPen = JSON.stringify(region.penalties);
+    if (prevPen !== curPen) diff.penalties = region.penalties;
+  }
 
   if (prev.teams && region.teams) {
     const prevTeamIds = new Set(prev.teams.map((t: any) => t.id));

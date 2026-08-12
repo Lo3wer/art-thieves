@@ -56,10 +56,42 @@ export const photoMetadataSchema = z.object({
   landmarkId: z.string().uuid(),
 });
 
+export const challengeSpecSchema = z.object({
+  text: z.string().min(1),
+  mode: z.enum(['instant', 'delayed']),
+  instant: z
+    .object({
+      completeLabel: z.string().optional(),
+      completeNote: z.string().optional(),
+      vetoLabel: z.string().optional(),
+      vetoNote: z.string().optional(),
+      penalty: z
+        .object({
+          type: z.enum(['tracker', 'transit']),
+          minutes: z.number().int().positive(),
+          note: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+  delayed: z
+    .object({
+      delayMinutes: z.number().int().positive().optional(),
+      returnToLandmark: z.boolean(),
+      preCondition: z.string().optional(),
+      requiresPhoto: z.boolean().optional(),
+      failsIfLockedByOtherTeam: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 export const challengeSchema = z.object({
   landmarkId: z.string().uuid(),
   outcome: z.enum(['complete', 'fail', 'pass']),
   teamId: z.string().uuid(),
+  photoId: z.string().uuid().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 export const tagSchema = z.object({

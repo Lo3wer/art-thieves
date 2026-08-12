@@ -1,5 +1,6 @@
 import type { Game, GameMap, Team, GameConfig, GameSummary, LocationPing, Photo, GameTimeline } from '../types';
 import { API_BASE } from '../../api';
+import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 
 const USE_MOCKS = false;
@@ -93,20 +94,35 @@ export const api = USE_MOCKS
             ...(photoId ? { photoId } : {}),
           }),
         }),
-      completeChallenge: (gameId: string, landmarkId: string) =>
+      completeChallenge: (gameId: string, landmarkId: string, photoId?: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'complete', teamId: getTeamId() }),
+          body: JSON.stringify({
+            landmarkId,
+            outcome: 'complete',
+            teamId: getTeamId(),
+            latitude: useLocationStore.getState().ownLocation?.latitude ?? undefined,
+            longitude: useLocationStore.getState().ownLocation?.longitude ?? undefined,
+            ...(photoId ? { photoId } : {}),
+          }),
         }),
       failChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'fail', teamId: getTeamId() }),
+          body: JSON.stringify({
+            landmarkId, outcome: 'fail', teamId: getTeamId(),
+            latitude: useLocationStore.getState().ownLocation?.latitude ?? undefined,
+            longitude: useLocationStore.getState().ownLocation?.longitude ?? undefined,
+          }),
         }),
       passChallenge: (gameId: string, landmarkId: string) =>
         request<void>(`/api/games/${gameId}/challenge`, {
           method: 'POST',
-          body: JSON.stringify({ landmarkId, outcome: 'pass', teamId: getTeamId() }),
+          body: JSON.stringify({
+            landmarkId, outcome: 'pass', teamId: getTeamId(),
+            latitude: useLocationStore.getState().ownLocation?.latitude ?? undefined,
+            longitude: useLocationStore.getState().ownLocation?.longitude ?? undefined,
+          }),
         }),
       tagTeam: (gameId: string, targetTeamId: string) =>
         request<void>(`/api/games/${gameId}/tag`, {

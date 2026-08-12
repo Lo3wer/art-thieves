@@ -8,6 +8,13 @@
       "when": 1785910597785,
       "tag": "0000_solid_lester",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786506493328,
+      "tag": "0001_challenge_system_v2",
+      "breakpoints": true
     }
   ]
 }

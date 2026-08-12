@@ -6,11 +6,13 @@ import type {
   Landmark,
   LandmarkState,
   ChallengeAttempt,
+  ChallengeOutcome,
   LocationPing,
   TagEvent,
   PushToken,
   LogEntry,
   Photo,
+  Penalty,
 } from './types';
 import { generateJoinCode, createDefaultMap } from './helpers';
 
@@ -20,6 +22,7 @@ const teams: Team[] = [];
 const landmarks: Landmark[] = [];
 const landmarkStates: LandmarkState[] = [];
 const challengeAttempts: ChallengeAttempt[] = [];
+const penalties: Penalty[] = [];
 const locationPings: LocationPing[] = [];
 const tagEvents: TagEvent[] = [];
 const pushTokens: PushToken[] = [];
@@ -121,19 +124,91 @@ export const store = {
     return state;
   },
 
-  // Challenge attempts
-  getChallengeAttempt: (gameId: string, landmarkId: string, teamId: string) =>
+  // Challenge sessions
+  getChallengeSession: (gameId: string, landmarkId: string, teamId: string) =>
     challengeAttempts.find(
       (a) => a.gameId === gameId && a.landmarkId === landmarkId && a.teamId === teamId
     ) ?? null,
-  addChallengeAttempt: (gameId: string, landmarkId: string, teamId: string, outcome: ChallengeAttempt['outcome']) => {
+  getChallengeSessionsByGame: (gameId: string) =>
+    challengeAttempts.filter((a) => a.gameId === gameId),
+  getChallengeSessionsForLandmark: (gameId: string, landmarkId: string) =>
+    challengeAttempts.filter((a) => a.gameId === gameId && a.landmarkId === landmarkId),
+  startChallengeSession: (
+    gameId: string,
+    landmarkId: string,
+    teamId: string,
+    delayMinutes?: number
+  ): ChallengeAttempt => {
+    const existing = store.getChallengeSession(gameId, landmarkId, teamId);
+    if (existing) return existing;
+    const startedAt = new Date().toISOString();
+    const readyAt = delayMinutes
+      ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+      : undefined;
     const attempt: ChallengeAttempt = {
-      id: uuid(), gameId, landmarkId, teamId, outcome,
-      createdAt: new Date().toISOString(),
+      id: uuid(), gameId, landmarkId, teamId,
+      status: delayMinutes ? 'pending' : 'ready',
+      outcome: undefined,
+      startedAt,
+      ...(readyAt ? { readyAt } : {}),
     };
     challengeAttempts.push(attempt);
     return attempt;
   },
+  resolveChallengeSession: (
+    gameId: string,
+    landmarkId: string,
+    teamId: string,
+    outcome: ChallengeOutcome,
+    penaltyUntil?: string
+  ): ChallengeAttempt => {
+    let session = store.getChallengeSession(gameId, landmarkId, teamId);
+    if (!session) {
+      session = store.startChallengeSession(gameId, landmarkId, teamId);
+    }
+    if (session.status === 'complete' || session.status === 'fail' || session.status === 'pass') {
+      return session;
+    }
+    session.status = outcome;
+    session.outcome = outcome;
+    session.completedAt = new Date().toISOString();
+    if (penaltyUntil) session.penaltyUntil = penaltyUntil;
+    return session;
+  },
+  voidPendingChallenges: (gameId: string, landmarkId: string, exceptTeamId?: string): string[] => {
+    const now = Date.now();
+    const voided: string[] = [];
+    for (const a of challengeAttempts) {
+      if (a.gameId === gameId && a.landmarkId === landmarkId && a.teamId !== exceptTeamId) {
+        if (a.status === 'pending') {
+          a.status = 'voided';
+          a.completedAt = new Date(now).toISOString();
+          voided.push(a.teamId);
+        }
+      }
+    }
+    return voided;
+  },
+
+  // Penalties
+  setPenalty: (gameId: string, teamId: string, type: Penalty['type'], until: string): Penalty => {
+    const existing = penalties.find(
+      (p) => p.gameId === gameId && p.teamId === teamId && p.type === type
+    );
+    if (existing) {
+      existing.until = until;
+      return existing;
+    }
+    const penalty: Penalty = { id: uuid(), gameId, teamId, type, until };
+    penalties.push(penalty);
+    return penalty;
+  },
+  getPenalty: (gameId: string, teamId: string, type: Penalty['type']): Penalty | null =>
+    penalties.find(
+      (p) => p.gameId === gameId && p.teamId === teamId && p.type === type && new Date(p.until).getTime() > Date.now()
+    ) ?? null,
+  getPenaltiesByGame: (gameId: string): Penalty[] =>
+    penalties.filter((p) => p.gameId === gameId && new Date(p.until).getTime() > Date.now()),
 
   // Location pings
   addLocationPing: (gameId: string, teamId: string, latitude: number, longitude: number) => {

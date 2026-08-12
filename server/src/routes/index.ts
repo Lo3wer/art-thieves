@@ -14,6 +14,7 @@ import {
   photoMetadataSchema,
 } from '../middleware/validation';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
+import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
 import { photoUpload } from '../middleware/upload';
 
@@ -66,12 +67,12 @@ router.get('/games/:id', (req, res) => {
   if (!game) throw new AppError(404, 'Game not found');
   const gameTeams = store.getTeamsByGame(game.id);
   const gameLandmarks = store.getLandmarksByGame(game.id);
-  const gameStates = store.getLandmarkStates(game.id);
   res.json({
     ...game,
     teams: gameTeams,
     landmarks: gameLandmarks,
-    landmarkStates: gameStates,
+    landmarkStates: decorateLandmarkStates(game.id),
+    penalties: store.getPenaltiesByGame(game.id),
   });
 });
 
@@ -88,6 +89,7 @@ router.post('/games', validate(createGameSchema), (req, res) => {
       longitude: f.geometry.coordinates[0],
       imageUrl: f.properties?.imageUrl,
       challengeText: f.properties?.challengeText,
+      challenge: f.properties?.challenge,
       mapLandmarkIndex: i,
     }));
   if (landmarkData) {
@@ -99,6 +101,7 @@ router.post('/games', validate(createGameSchema), (req, res) => {
     teams: [],
     landmarks: store.getLandmarksByGame(game.id),
     landmarkStates: [],
+    penalties: [],
   });
 });
 
@@ -124,7 +127,8 @@ router.post('/games/join/:joinCode', validate(joinGameSchema), (req, res) => {
         ...game,
         teams: store.getTeamsByGame(game.id),
         landmarks: store.getLandmarksByGame(game.id),
-        landmarkStates: store.getLandmarkStates(game.id),
+        landmarkStates: decorateLandmarkStates(game.id),
+        penalties: store.getPenaltiesByGame(game.id),
       },
       team,
     });
@@ -259,6 +263,7 @@ router.post('/games/:id/claim', validate(claimSchema), (req, res) => {
     photo = { id: p.id, url: p.url };
   }
   store.upsertLandmarkState(game.id, landmarkId, teamId, false, photo?.id);
+  startChallengeForClaim(game.id, landmarkId, teamId, landmark.challenge ?? null);
   store.addLogEntry(game.id, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
     latitude, longitude,
@@ -274,23 +279,34 @@ router.post('/games/:id/challenge', validate(challengeSchema), (req, res) => {
   const game = store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
-  const { landmarkId, outcome, teamId } = req.body;
+  const { landmarkId, outcome, teamId, photoId } = req.body;
   if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
-  const existing = store.getLandmarkStates(game.id).find((s) => s.landmarkId === landmarkId);
-  if (!existing || existing.teamId !== teamId) throw new AppError(400, 'Landmark not claimed by your team');
-  if (existing.locked) throw new AppError(400, 'Landmark is already locked');
+  const result = resolveChallengeForTeam({
+    gameId: game.id,
+    landmarkId,
+    teamId,
+    outcome,
+    latitude: req.body.latitude ?? 0,
+    longitude: req.body.longitude ?? 0,
+    photoId,
+  });
 
-  const attempted = store.getChallengeAttempt(game.id, landmarkId, teamId);
-  if (attempted) throw new AppError(400, 'Team already attempted this challenge');
-  if (outcome === 'complete') {
-    store.upsertLandmarkState(game.id, landmarkId, teamId, true);
-  }
-  store.addChallengeAttempt(game.id, landmarkId, teamId, outcome);
   store.addLogEntry(game.id, `challenge_${outcome}`, { landmarkId, teamId });
+  for (const voidedTeamId of result.voidedTeams) {
+    const vt = store.getTeam(voidedTeamId);
+    store.addLogEntry(game.id, 'challenge_voided', {
+      landmarkId, teamId: voidedTeamId, byTeamId: teamId,
+      teamName: vt?.name ?? 'Unknown',
+    });
+  }
   checkWinAndEnd(game.id);
   broadcastState(game.id);
-  res.json({ outcome });
+  res.json({
+    outcome,
+    penaltyUntil: result.penaltyUntil ?? null,
+    penaltyType: result.penaltyType ?? null,
+  });
 });
 
 // Tag
@@ -385,7 +401,7 @@ router.get('/games/:id/summary', (req, res) => {
 
   const landmarkDetails = landmarks.map((l) => {
     const st = states.find((s) => s.landmarkId === l.id);
-    const challenge = st?.teamId ? store.getChallengeAttempt(game.id, l.id, st.teamId) : null;
+    const session = st?.teamId ? store.getChallengeSession(game.id, l.id, st.teamId) : null;
     return {
       id: l.id,
       name: l.name,
@@ -394,8 +410,8 @@ router.get('/games/:id/summary', (req, res) => {
       teamId: st?.teamId ?? null,
       teamName: st?.teamId ? teamName[st.teamId] ?? null : null,
       claimedAt: st?.claimedAt ?? null,
-      challenge: challenge
-        ? { outcome: challenge.outcome, teamId: challenge.teamId, createdAt: challenge.createdAt }
+      challenge: session?.outcome
+        ? { outcome: session.outcome, teamId: session.teamId, createdAt: session.completedAt ?? session.startedAt }
         : null,
     };
   });

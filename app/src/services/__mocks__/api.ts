@@ -40,6 +40,38 @@ const vancouverMap: GameMap = {
           name: `Landmark ${i + 1}`,
           challengeText: i < 20 ? `Find the hidden detail on Landmark ${i + 1}` : undefined,
           imageUrl: undefined,
+          ...(i === 0
+            ? {
+                challenge: {
+                  text: 'You may instantly lock this landmark, but you lose access to your tracker for 30 minutes. Alternatively, you may veto to avoid the tracker penalty, but you will not lock this landmark.',
+                  mode: 'instant',
+                  instant: {
+                    completeLabel: 'Lock now (lose tracker 30 min)',
+                    completeNote: 'You will lose access to your tracker for 30 minutes.',
+                    vetoLabel: 'Veto (don\u2019t lock)',
+                    vetoNote: 'No tracker penalty, but this landmark is not locked.',
+                    penalty: {
+                      type: 'tracker',
+                      minutes: 30,
+                      note: 'Your team has lost access to its tracker for 30 minutes.',
+                    },
+                  },
+                },
+              }
+            : {}),
+          ...(i === 1
+            ? {
+                challenge: {
+                  text: 'Return to this landmark at least 1 hour from now to lock it. You may leave and return freely, but this challenge fails if another team locks it before you.',
+                  mode: 'delayed',
+                  delayed: {
+                    delayMinutes: 60,
+                    returnToLandmark: true,
+                    failsIfLockedByOtherTeam: true,
+                  },
+                },
+              }
+            : {}),
         },
         geometry: {
           type: 'Point' as const,
@@ -90,6 +122,7 @@ function createLandmarksFromMap(map: GameMap, gameId: string): Landmark[] {
         longitude: coords[0],
         imageUrl: f.properties?.imageUrl as string | undefined,
         challengeText: f.properties?.challengeText as string | undefined,
+        challenge: f.properties?.challenge as Landmark['challenge'],
         mapLandmarkIndex: i,
       };
     });

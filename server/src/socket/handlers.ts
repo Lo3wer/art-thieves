@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
+import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
 import { broadcastState, seedSnapshot } from './broadcast';
 
 const FREEZE_MS = 10 * 60 * 1000;
@@ -27,7 +28,8 @@ export function registerGameHandlers(io: Server): void {
             ...game,
             teams: store.getTeamsByGame(gameId),
             landmarks: store.getLandmarksByGame(gameId),
-            landmarkStates: store.getLandmarkStates(gameId),
+            landmarkStates: decorateLandmarkStates(gameId),
+            penalties: store.getPenaltiesByGame(gameId),
           },
         });
         seedSnapshot(gameId);
@@ -138,6 +140,7 @@ function processClaim(
 
   const isSteal = existing?.teamId != null && existing.teamId !== teamId;
   store.upsertLandmarkState(gameId, landmarkId, teamId, false);
+  startChallengeForClaim(gameId, landmarkId, teamId, landmark.challenge ?? null);
   store.addLogEntry(gameId, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
   });
@@ -165,18 +168,29 @@ function processChallenge(
   if (game.status !== 'active') throw new Error('Game is not active');
   if (isTeamFrozen(gameId, teamId)) throw new Error('Your team is frozen');
 
-  const existing = store.getLandmarkStates(gameId).find((s) => s.landmarkId === landmarkId);
-  if (!existing || existing.teamId !== teamId) throw new Error('Landmark not claimed by your team');
-  if (existing.locked) throw new Error('Landmark is already locked');
-
-  const attempted = store.getChallengeAttempt(gameId, landmarkId, teamId);
-  if (attempted) throw new Error('Your team already attempted this challenge');
-
-  if (outcome === 'complete') {
-    store.upsertLandmarkState(gameId, landmarkId, teamId, true);
+  const landmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
+  let result;
+  if (landmark) {
+    result = resolveChallengeForTeam({
+      gameId,
+      landmarkId,
+      teamId,
+      outcome,
+      latitude: 0,
+      longitude: 0,
+    });
   }
-  store.addChallengeAttempt(gameId, landmarkId, teamId, outcome);
+
   store.addLogEntry(gameId, `challenge_${outcome}`, { landmarkId, teamId });
+  if (result?.voidedTeams.length) {
+    for (const voidedTeamId of result.voidedTeams) {
+      const vt = store.getTeam(voidedTeamId);
+      store.addLogEntry(gameId, 'challenge_voided', {
+        landmarkId, teamId: voidedTeamId, byTeamId: teamId,
+        teamName: vt?.name ?? 'Unknown',
+      });
+    }
+  }
 
   const teams = store.getTeamsByGame(gameId);
   const states = store.getLandmarkStates(gameId);

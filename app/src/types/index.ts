@@ -28,6 +28,44 @@ export interface Team {
   color: string;
 }
 
+export type ChallengeMode = 'instant' | 'delayed';
+export type ChallengeOutcome = 'complete' | 'fail' | 'pass';
+export type ChallengeStatus = 'pending' | 'ready' | 'complete' | 'fail' | 'pass' | 'voided';
+
+export interface ChallengeSpec {
+  text: string;
+  mode: ChallengeMode;
+  instant?: {
+    completeLabel?: string;
+    completeNote?: string;
+    vetoLabel?: string;
+    vetoNote?: string;
+    penalty?: { type: 'tracker' | 'transit'; minutes: number; note: string };
+  };
+  delayed?: {
+    delayMinutes?: number;
+    returnToLandmark: boolean;
+    preCondition?: string;
+    requiresPhoto?: boolean;
+    failsIfLockedByOtherTeam?: boolean;
+  };
+}
+
+export interface ChallengeView {
+  status: ChallengeStatus;
+  readyAt?: string;
+  outcome?: ChallengeOutcome;
+  penaltyUntil?: string;
+}
+
+export interface Penalty {
+  id: string;
+  gameId: string;
+  teamId: string;
+  type: 'tracker' | 'transit';
+  until: string;
+}
+
 export interface Landmark {
   id: string;
   gameId: string;
@@ -36,6 +74,7 @@ export interface Landmark {
   longitude: number;
   imageUrl?: string;
   challengeText?: string;
+  challenge?: ChallengeSpec;
   mapLandmarkIndex: number;
 }
 
@@ -43,6 +82,8 @@ export interface LandmarkState {
   landmarkId: string;
   status: 'unclaimed' | 'claimed' | 'locked';
   teamId?: string;
+  claimedAt?: string;
+  challenge?: ChallengeView;
 }
 
 export interface GameConfig {
@@ -68,6 +109,7 @@ export interface Game {
   teams: Team[];
   landmarks: Landmark[];
   landmarkStates: LandmarkState[];
+  penalties?: Penalty[];
 }
 
 export interface TagEvent {

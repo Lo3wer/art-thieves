@@ -39,6 +39,7 @@ export const landmarks = sqliteTable('landmarks', {
   longitude: real('longitude').notNull(),
   imageUrl: text('image_url'),
   challengeText: text('challenge_text'),
+  challenge: text('challenge', { mode: 'json' }),
   mapLandmarkIndex: integer('map_landmark_index').notNull(),
 });
 
@@ -61,8 +62,20 @@ export const challengeAttempts = sqliteTable('challenge_attempts', {
   gameId: text('game_id').notNull(),
   landmarkId: text('landmark_id').notNull(),
   teamId: text('team_id').notNull(),
-  outcome: text('outcome').notNull(),
-  createdAt: text('created_at').notNull(),
+  status: text('status').notNull(),
+  outcome: text('outcome'),
+  startedAt: text('started_at').notNull(),
+  readyAt: text('ready_at'),
+  completedAt: text('completed_at'),
+  penaltyUntil: text('penalty_until'),
+});
+
+export const penalties = sqliteTable('penalties', {
+  id: text('id').primaryKey(),
+  gameId: text('game_id').notNull(),
+  teamId: text('team_id').notNull(),
+  type: text('type').notNull(),
+  until: text('until').notNull(),
 });
 
 export const locationPings = sqliteTable(

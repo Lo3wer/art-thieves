@@ -162,6 +162,11 @@ export default function MapScreen() {
     [game]
   );
 
+  const myTrackerPenalty =
+    game?.penalties?.find(
+      (p) => p.teamId === myTeamId && p.type === 'tracker' && new Date(p.until).getTime() > Date.now()
+    ) ?? null;
+
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const centeredRef = useRef(false);
 
@@ -236,6 +241,13 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
+      {myTrackerPenalty && (
+        <View style={styles.penaltyBanner}>
+          <Text style={styles.penaltyBannerText}>
+            👁️ Blind spot active — your tracker is hidden for {Math.max(1, Math.round((new Date(myTrackerPenalty.until).getTime() - Date.now()) / 60000))} min
+          </Text>
+        </View>
+      )}
       <Map style={styles.map} mapStyle={MAP_STYLE}>
         <Camera
           initialViewState={{
@@ -293,6 +305,7 @@ export default function MapScreen() {
 
         {teamLocations.map((loc) => {
           const selected = selectedTeamId === loc.teamId;
+          if (myTrackerPenalty && loc.teamId === myTeamId) return null;
           return (
             <MapMarker
               key={loc.teamId}
@@ -346,8 +359,10 @@ export default function MapScreen() {
                 : `Claimed by ${claimedTeam?.name ?? 'Unknown'}`}
             </Text>
           )}
-          {selectedLandmark.challengeText && (
-            <Text style={styles.challengeText}>Challenge: {selectedLandmark.challengeText}</Text>
+          {(selectedLandmark.challenge?.text ?? selectedLandmark.challengeText) && (
+            <Text style={styles.challengeText}>
+              Challenge: {selectedLandmark.challenge?.text ?? selectedLandmark.challengeText}
+            </Text>
           )}
           {isNearby && !isClaimedByMe && landmarkState?.status !== 'locked' && (
             <Text style={styles.nearbyText}>You are within vicinity!</Text>
@@ -411,6 +426,11 @@ const styles = StyleSheet.create({
   closeBtn: { fontSize: 20, color: '#999', paddingLeft: 12 },
   statusText: { fontSize: 14, color: '#666', marginTop: 4 },
   challengeText: { fontSize: 13, color: '#888', marginTop: 6, fontStyle: 'italic' },
+  penaltyBanner: {
+    position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
+    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 12,
+  },
+  penaltyBannerText: { color: '#fff', fontSize: 13, fontWeight: '600', textAlign: 'center' },
   nearbyText: { fontSize: 14, fontWeight: '600', color: '#2ecc71', marginTop: 8 },
   distantText: { fontSize: 13, color: '#e74c3c', marginTop: 8 },
   mockPanel: {

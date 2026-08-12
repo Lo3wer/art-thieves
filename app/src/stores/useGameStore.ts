@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Game, Landmark, LandmarkState, GameStatus, GameConfig } from '../types';
+import type { Game, Landmark, LandmarkState, GameStatus, GameConfig, Penalty } from '../types';
 
 function hasStatus(s: any): s is LandmarkState {
   return typeof s?.status === 'string';
@@ -7,12 +7,20 @@ function hasStatus(s: any): s is LandmarkState {
 
 function normalizeState(raw: any): LandmarkState {
   if (hasStatus(raw)) {
-    return { landmarkId: raw.landmarkId, status: raw.status, teamId: raw.teamId };
+    return {
+      landmarkId: raw.landmarkId,
+      status: raw.status,
+      teamId: raw.teamId,
+      claimedAt: raw.claimedAt,
+      challenge: raw.challenge,
+    };
   }
   return {
     landmarkId: raw?.landmarkId,
     status: raw?.locked ? 'locked' : raw?.teamId ? 'claimed' : 'unclaimed',
     teamId: raw?.teamId,
+    claimedAt: raw?.claimedAt,
+    challenge: raw?.challenge,
   };
 }
 
@@ -28,6 +36,10 @@ interface GameStore {
   updateStatus: (status: GameStatus) => void;
   updateLandmarkState: (state: LandmarkState) => void;
   clearGame: () => void;
+}
+
+function normalizePenalties(penalties?: Penalty[]): Penalty[] | undefined {
+  return penalties ?? undefined;
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -52,6 +64,7 @@ export const useGameStore = create<GameStore>((set) => ({
         });
         next.landmarkStates = [...map.values()];
       }
+      if (diff.penalties !== undefined) next.penalties = normalizePenalties(diff.penalties);
       return { game: next };
     }),
   updateStatus: (status) =>

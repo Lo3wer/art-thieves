@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator, FlatList,
 } from 'react-native';
@@ -9,11 +9,28 @@ import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
-import { scheduleLocalNotification } from '../services/notifications';
-import type { Landmark, LandmarkState } from '../types';
+import { scheduleLocalNotification, scheduleLocalNotificationDelayed, formatMinutesUntil } from '../services/notifications';
+import type { Landmark, LandmarkState, ChallengeSpec, ChallengeView } from '../types';
 import FrozenBar from '../components/FrozenBar';
 
-type ClaimPhase = 'idle' | 'camera' | 'preview' | 'result' | 'challenge';
+type ClaimPhase = 'idle' | 'camera' | 'preview' | 'result' | 'challenge' | 'challengePhoto' | 'challengePhotoPreview';
+
+const OUTCOME_LABEL: Record<string, string> = {
+  complete: 'Challenge completed',
+  fail: 'Challenge failed',
+  pass: 'Challenge passed',
+};
+
+function challengeStateLabel(view: ChallengeView | undefined): string | null {
+  if (!view) return null;
+  if (view.status === 'pending') {
+    return view.readyAt ? `Return in ${formatMinutesUntil(view.readyAt)} to complete` : 'Challenge in progress';
+  }
+  if (view.status === 'ready') return 'Challenge ready — return here to complete';
+  if (view.status === 'voided') return 'Challenge voided (another team locked it first)';
+  if (view.outcome) return OUTCOME_LABEL[view.outcome];
+  return null;
+}
 
 export default function ClaimScreen() {
   const game = useGameStore((s) => s.game);
@@ -30,8 +47,8 @@ export default function ClaimScreen() {
   const [phase, setPhase] = useState<ClaimPhase>('idle');
   const [loading, setLoading] = useState(false);
   const [showStealModal, setShowStealModal] = useState(false);
-  const [challengeAttempted, setChallengeAttempted] = useState(false);
   const [resultMessage, setResultMessage] = useState('');
+  const [exitInfo, setExitInfo] = useState<string | null>(null);
 
   const nearbyLandmark = useCallback((): Landmark | null => {
     if (!game || !ownLocation) return null;
@@ -70,19 +87,78 @@ export default function ClaimScreen() {
         const s = stateMap.get(lm.id);
         return s && (s.status === 'claimed' || s.status === 'locked');
       })
-      .map((lm) => ({
-        id: lm.id,
-        name: lm.name,
-        challengeText: lm.challengeText,
-        status: stateMap.get(lm.id)!.status,
-      }));
+      .map((lm) => {
+        const s = stateMap.get(lm.id)!;
+        return {
+          id: lm.id,
+          name: lm.name,
+          challengeText: lm.challenge?.text ?? lm.challengeText,
+          status: s.status,
+          challenge: s.challenge,
+        };
+      });
   }, [game, myTeamId]);
+
+  const lm = nearbyLandmark();
+  const state = lm ? landmarkState(lm) : null;
+  const spec = useMemo((): ChallengeSpec | null => {
+    if (!lm) return null;
+    if (lm.challenge) return lm.challenge;
+    if (lm.challengeText) return { text: lm.challengeText, mode: 'instant' };
+    return null;
+  }, [lm]);
+
+  const exitToIdle = (message: string) => {
+    setExitInfo(message);
+    setPhoto(null);
+    setPhase('idle');
+  };
+
+  const reset = () => {
+    setPhoto(null);
+    setPhase('idle');
+    setShowStealModal(false);
+  };
+
+  // Auto-exit the challenge screen when the claim context changes underneath us
+  // (stolen, locked by another team, or walked away) to avoid a deadlock.
+  useEffect(() => {
+    if (phase !== 'challenge' && phase !== 'challengePhoto' && phase !== 'challengePhotoPreview') return;
+    if (!lm) {
+      reset();
+      return;
+    }
+    const s = landmarkState(lm);
+    if (s.status === 'locked') {
+      if (s.teamId === myTeamId) {
+        if (phase === 'challenge') setPhase('result');
+        else reset();
+      } else {
+        exitToIdle(`${lm.name} was locked by another team`);
+      }
+      return;
+    }
+    if (s.status === 'unclaimed' || (s.teamId && s.teamId !== myTeamId)) {
+      exitToIdle(`${lm.name} was taken by another team`);
+      return;
+    }
+    if (phase === 'challenge' && s.challenge?.status === 'voided') {
+      exitToIdle(`${lm.name}'s challenge was voided (another team locked it first)`);
+    }
+  }, [phase, lm, landmarkState, myTeamId]);
+
+  useEffect(() => {
+    if (!exitInfo) return;
+    const t = setTimeout(() => setExitInfo(null), 4000);
+    return () => clearTimeout(t);
+  }, [exitInfo]);
 
   const handleTakePhoto = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) return;
     }
+    setPhoto(null);
     setPhase('camera');
   };
 
@@ -91,24 +167,23 @@ export default function ClaimScreen() {
     const snap = await cameraRef.current.takePictureAsync({ quality: 0.7 });
     if (snap?.uri) {
       setPhoto(snap.uri);
-      setPhase('preview');
+      setPhase(phase === 'challengePhoto' ? 'challengePhotoPreview' : 'preview');
     }
   };
 
   const handleConfirmClaim = async () => {
-    const lm = nearbyLandmark();
-    if (!lm || !game) return;
+    const landmark = nearbyLandmark();
+    if (!landmark || !game) return;
 
-    const state = landmarkState(lm);
-    if (state.status === 'locked') {
+    const st = landmarkState(landmark);
+    if (st.status === 'locked') {
       Alert.alert('Locked', 'This landmark is locked and cannot be claimed');
       setPhase('idle');
       return;
     }
 
-    const isSteal = state.status === 'claimed' && state.teamId !== myTeamId;
+    const isSteal = st.status === 'claimed' && st.teamId !== myTeamId;
     if (isSteal && !showStealModal) {
-      const owner = game.teams.find((t) => t.id === state.teamId);
       setShowStealModal(true);
       return;
     }
@@ -117,34 +192,44 @@ export default function ClaimScreen() {
     try {
       let photoId: string | undefined;
       if (photo) {
-        const uploaded = await uploadPhoto(game.id, lm.id, photo);
+        const uploaded = await uploadPhoto(game.id, landmark.id, photo);
         photoId = uploaded.photoId;
       }
-      await api.claimLandmark(game.id, lm.id, ownLocation!.latitude, ownLocation!.longitude, photoId);
+      await api.claimLandmark(game.id, landmark.id, ownLocation!.latitude, ownLocation!.longitude, photoId);
       updateLandmarkState({
-        landmarkId: lm.id,
+        landmarkId: landmark.id,
         status: 'claimed',
         teamId: myTeamId ?? undefined,
+        claimedAt: new Date().toISOString(),
       });
       setShowStealModal(false);
 
       if (isSteal) {
-        const owner = game.teams.find((t) => t.id === state.teamId);
         scheduleLocalNotification(
           'Landmark Stolen!',
-          `You stole ${lm.name} from ${owner?.name ?? 'Unknown'}!`
+          `You stole ${landmark.name} from another team!`
         );
-        setResultMessage(`Stole ${lm.name} from ${owner?.name ?? 'Unknown'}!`);
+        setResultMessage(`Stole ${landmark.name}!`);
       } else {
         scheduleLocalNotification(
           'Landmark Claimed!',
-          `You claimed ${lm.name}!`
+          `You claimed ${landmark.name}!`
         );
-        setResultMessage(`Claimed ${lm.name}!`);
+        setResultMessage(`Claimed ${landmark.name}!`);
       }
 
-      if (lm.challengeText) {
+      if (spec) {
         setPhase('challenge');
+        if (spec.mode === 'delayed' && spec.delayed?.delayMinutes) {
+          scheduleLocalNotificationDelayed(
+            'Challenge Ready',
+            `${landmark.name}: your challenge is ready — return to lock it!`,
+            spec.delayed.delayMinutes * 60
+          );
+        }
+        if (spec.instant?.penalty?.note) {
+          scheduleLocalNotification(`${landmark.name}: Penalty`, spec.instant.penalty.note);
+        }
       } else {
         setPhase('result');
       }
@@ -156,20 +241,37 @@ export default function ClaimScreen() {
     }
   };
 
-  const handleChallenge = async (outcome: 'complete' | 'fail' | 'pass') => {
-    const lm = nearbyLandmark();
+  const applyPenaltyReminders = (lmName: string, penalty: { type: string; minutes: number; note: string } | undefined) => {
+    if (!penalty) return;
+    scheduleLocalNotification(`${penalty.type === 'tracker' ? 'Tracker' : 'Transit'} Penalty`, penalty.note);
+    scheduleLocalNotificationDelayed(
+      `${penalty.type === 'tracker' ? 'Tracker' : 'Transit'} Restored`,
+      penalty.type === 'tracker'
+        ? `${lmName}: your tracker access has been restored.`
+        : `${lmName}: your team may take transit again.`,
+      penalty.minutes * 60
+    );
+  };
+
+  const handleChallenge = async (outcome: 'complete' | 'fail' | 'pass', photoId?: string) => {
     if (!lm || !game) return;
     setLoading(true);
     try {
+      let response: { penaltyUntil?: string; penaltyType?: 'tracker' | 'transit' } | null = null;
       if (outcome === 'complete') {
-        await api.completeChallenge(game.id, lm.id);
+        response = await api.completeChallenge(game.id, lm.id, photoId) as any;
         updateLandmarkState({
           landmarkId: lm.id,
           status: 'locked',
           teamId: myTeamId ?? undefined,
         });
         scheduleLocalNotification('Challenge Complete!', `${lm.name} is now locked!`);
-        setResultMessage(`${lm.name} is now locked!`);
+        let message = `${lm.name} is now locked!`;
+        if (response?.penaltyType && spec?.instant?.penalty) {
+          applyPenaltyReminders(lm.name, { ...spec.instant.penalty, type: response.penaltyType });
+          message = `${message}\n\n${spec.instant.penalty.note}`;
+        }
+        setResultMessage(message);
       } else if (outcome === 'fail') {
         await api.failChallenge(game.id, lm.id);
         setResultMessage(`Challenge failed for ${lm.name}`);
@@ -177,39 +279,65 @@ export default function ClaimScreen() {
         await api.passChallenge(game.id, lm.id);
         setResultMessage(`Challenge passed for ${lm.name}`);
       }
-      setChallengeAttempted(true);
       setPhase('result');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Challenge failed');
+      reset();
     } finally {
       setLoading(false);
     }
   };
 
-  const reset = () => {
-    setPhoto(null);
-    setPhase('idle');
-    setShowStealModal(false);
-    setChallengeAttempted(false);
+  const handleChallengeCompleteWithPhoto = async () => {
+    if (!lm || !game || !photo) return;
+    setLoading(true);
+    try {
+      const uploaded = await uploadPhoto(game.id, lm.id, photo);
+      await handleChallenge('complete', uploaded.photoId);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Photo upload failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const lm = nearbyLandmark();
-  const state = lm ? landmarkState(lm) : null;
-  const isSteal = state?.status === 'claimed' && state?.teamId !== myTeamId;
-  const owner = isSteal && lm && game
-    ? game.teams.find((t) => t.id === state?.teamId)
-    : null;
+  const startChallengeCamera = () => {
+    (async () => {
+      if (!permission?.granted) {
+        const result = await requestPermission();
+        if (!result.granted) return;
+      }
+      setPhoto(null);
+      setPhase('challengePhoto');
+    })();
+  };
 
-  if (phase === 'camera') {
+  const isSteal = state?.status === 'claimed' && state?.teamId !== myTeamId;
+  const owner = isSteal && lm && game ? game.teams.find((t) => t.id === state?.teamId) : null;
+  const challengeView = state?.challenge;
+  const isAttempted = challengeView?.outcome != null;
+  const isVoided = challengeView?.status === 'voided';
+  const isReady =
+    challengeView?.status === 'ready' ||
+    (challengeView?.status === 'pending' &&
+      challengeView?.readyAt &&
+      new Date(challengeView.readyAt).getTime() <= Date.now());
+
+  if (phase === 'camera' || phase === 'challengePhoto') {
     return (
       <View style={styles.cameraContainer}>
         <CameraView ref={cameraRef} style={styles.camera} facing="front" />
         <View style={styles.cameraOverlay} pointerEvents="box-none">
-          <Text style={styles.cameraHint}>Take a selfie with the landmark</Text>
+          <Text style={styles.cameraHint}>
+            {phase === 'challengePhoto' ? 'Take a photo as proof for your challenge' : 'Take a selfie with the landmark'}
+          </Text>
           <TouchableOpacity style={styles.snapButton} onPress={handleSnap}>
             <View style={styles.snapInner} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelButton} onPress={reset}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => (phase === 'challengePhoto' ? setPhase('challenge') : reset())}
+          >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -217,28 +345,29 @@ export default function ClaimScreen() {
     );
   }
 
-  if (phase === 'preview') {
+  if (phase === 'preview' || phase === 'challengePhotoPreview') {
+    const isChallengePhoto = phase === 'challengePhotoPreview';
     return (
       <View style={styles.centered}>
-        <Text style={styles.sectionTitle}>Preview Selfie</Text>
+        <Text style={styles.sectionTitle}>{isChallengePhoto ? 'Preview Proof' : 'Preview Selfie'}</Text>
         {photo && <Image source={{ uri: photo }} style={styles.previewImage} />}
         <View style={styles.previewButtonRow}>
           <TouchableOpacity
             style={[styles.retakeButton, loading && styles.buttonDisabled]}
-            onPress={() => setPhase('camera')}
+            onPress={() => setPhase(isChallengePhoto ? 'challengePhoto' : 'camera')}
             disabled={loading}
           >
             <Text style={styles.retakeButtonText}>Retake</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.confirmButton, loading && styles.buttonDisabled]}
-            onPress={handleConfirmClaim}
+            onPress={isChallengePhoto ? handleChallengeCompleteWithPhoto : handleConfirmClaim}
             disabled={loading}
           >
             <Text style={styles.buttonText}>{loading ? '...' : 'Confirm'}</Text>
           </TouchableOpacity>
         </View>
-        {isSteal && (
+        {isSteal && !isChallengePhoto && (
           <Text style={styles.stealWarning}>This landmark belongs to {owner?.name ?? 'another team'}</Text>
         )}
       </View>
@@ -263,37 +392,90 @@ export default function ClaimScreen() {
     );
   }
 
-  if (phase === 'challenge' && lm) {
+  if (phase === 'challenge' && lm && spec) {
+    const isDelayed = spec.mode === 'delayed';
+    const needsPhoto = isDelayed && !!spec.delayed?.requiresPhoto;
+
     return (
       <View style={styles.centered}>
         <Text style={styles.sectionTitle}>Challenge</Text>
-        <Text style={styles.challengePrompt}>{lm.challengeText}</Text>
-        {challengeAttempted ? (
-          <Text style={styles.attemptedText}>Challenge already attempted for this landmark</Text>
+        <Text style={styles.challengePrompt}>{spec.text}</Text>
+
+        {isVoided ? (
+          <>
+            <Text style={styles.attemptedText}>Challenge voided — another team locked this landmark first.</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={reset}>
+              <Text style={styles.buttonText}>Done</Text>
+            </TouchableOpacity>
+          </>
+        ) : isAttempted ? (
+          <>
+            <Text style={styles.attemptedText}>Challenge already attempted for this landmark.</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={reset}>
+              <Text style={styles.buttonText}>Done</Text>
+            </TouchableOpacity>
+          </>
+        ) : isDelayed && !isReady ? (
+          <>
+            <Text style={styles.pendingText}>
+              This challenge will be ready in {spec.delayed?.delayMinutes ? `${spec.delayed.delayMinutes}` : ''} minutes.
+              {spec.delayed?.returnToLandmark ? ' Return here to lock it.' : ''}
+              {spec.delayed?.preCondition ? `\n\n${spec.delayed.preCondition}` : ''}
+            </Text>
+            {challengeView?.readyAt && (
+              <Text style={styles.attemptedText}>Ready in {formatMinutesUntil(challengeView.readyAt)}</Text>
+            )}
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setPhase('idle')}>
+              <Text style={styles.secondaryButtonText}>Leave for now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={reset}>
+              <Text style={styles.secondaryButtonText}>Done</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <View style={styles.challengeButtons}>
-            <TouchableOpacity
-              style={[styles.challengeBtn, { backgroundColor: '#2ecc71' }]}
-              onPress={() => handleChallenge('complete')}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Complete</Text>
+          <>
+            {spec.instant?.penalty?.note && (
+              <Text style={styles.penaltyNote}>{spec.instant.penalty.note}</Text>
+            )}
+            <View style={styles.challengeButtons}>
+              <TouchableOpacity
+                style={[styles.challengeBtn, { backgroundColor: '#2ecc71' }]}
+                onPress={() => (needsPhoto ? startChallengeCamera() : handleChallenge('complete'))}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>
+                  {needsPhoto
+                    ? 'Complete (with photo)'
+                    : spec.instant?.completeLabel ?? 'Complete'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.challengeBtn, { backgroundColor: '#e74c3c' }]}
+                onPress={() => handleChallenge('fail')}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>Fail</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.challengeBtn, { backgroundColor: '#f39c12' }]}
+                onPress={() => handleChallenge('pass')}
+                disabled={loading}
+              >
+                <Text style={styles.buttonText}>
+                  {spec.instant?.vetoLabel ?? 'Pass'}
+                </Text>
+              </TouchableOpacity>
+              {spec.instant?.vetoNote && (
+                <Text style={styles.penaltyNote}>{spec.instant.vetoNote}</Text>
+              )}
+              {isDelayed && spec.delayed?.returnToLandmark && (
+                <Text style={styles.penaltyNote}>Must be at the landmark to lock it.</Text>
+              )}
+            </View>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setPhase('idle')}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.challengeBtn, { backgroundColor: '#e74c3c' }]}
-              onPress={() => handleChallenge('fail')}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Fail</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.challengeBtn, { backgroundColor: '#f39c12' }]}
-              onPress={() => handleChallenge('pass')}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Pass</Text>
-            </TouchableOpacity>
-          </View>
+          </>
         )}
       </View>
     );
@@ -350,6 +532,7 @@ export default function ClaimScreen() {
               contentContainerStyle={styles.listContent}
               renderItem={({ item }) => {
                 const isLocked = item.status === 'locked';
+                const label = isLocked ? null : challengeStateLabel(item.challenge);
                 return (
                   <View style={[styles.ownedRow, isLocked && styles.ownedRowLocked]}>
                     <View
@@ -360,11 +543,9 @@ export default function ClaimScreen() {
                       <Text style={[styles.ownedStatus, isLocked && styles.ownedStatusLocked]}>
                         {isLocked ? '🔒 Locked' : 'Claimed'}
                       </Text>
-                      {!isLocked && item.challengeText && (
-                        <Text style={styles.ownedHint}>Complete the challenge to lock this landmark</Text>
-                      )}
-                      {isLocked && (
-                        <Text style={styles.ownedHint}>Locked and safe from being stolen</Text>
+                      {isLocked && <Text style={styles.ownedHint}>Locked and safe from being stolen</Text>}
+                      {!isLocked && (
+                        <Text style={styles.ownedHint}>{label ?? 'Complete the challenge to lock this landmark'}</Text>
                       )}
                     </View>
                   </View>
@@ -393,32 +574,52 @@ export default function ClaimScreen() {
         </View>
       ) : (
         <View style={styles.centered}>
+          {exitInfo && <Text style={styles.exitInfo}>{exitInfo}</Text>}
           <Text style={styles.sectionTitle}>{lm.name}</Text>
           {state && (
             <Text style={styles.statusText}>
               {state.status === 'unclaimed'
                 ? 'Unclaimed'
+                : state.teamId === myTeamId
+                ? 'Claimed by you'
                 : `Owned by ${owner?.name ?? 'Unknown'}`}
             </Text>
           )}
-          {lm.challengeText && (
-            <Text style={styles.challengePreview}>Challenge available after claiming</Text>
-          )}
-          <TouchableOpacity
-            style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
-            onPress={handleTakePhoto}
-            disabled={isFrozen}
-          >
-            <Text style={styles.buttonText}>
-              {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
+          {spec && (
+            <Text style={styles.challengePreview}>
+              {state?.teamId === myTeamId && !isAttempted && challengeView
+                ? challengeStateLabel(challengeView) ?? spec.text
+                : spec.text}
             </Text>
-          </TouchableOpacity>
-          {!isFrozen && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleConfirmClaim}>
-              <Text style={styles.secondaryButtonText}>
-                {isSteal ? 'Steal Without Photo' : 'Claim Without Photo'}
-              </Text>
+          )}
+
+          {state?.teamId === myTeamId && spec && !isAttempted ? (
+            <TouchableOpacity
+              style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+              onPress={() => setPhase('challenge')}
+              disabled={isFrozen}
+            >
+              <Text style={styles.buttonText}>View Challenge</Text>
             </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+                onPress={handleTakePhoto}
+                disabled={isFrozen}
+              >
+                <Text style={styles.buttonText}>
+                  {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
+                </Text>
+              </TouchableOpacity>
+              {!isFrozen && (
+                <TouchableOpacity style={styles.secondaryButton} onPress={handleConfirmClaim}>
+                  <Text style={styles.secondaryButtonText}>
+                    {isSteal ? 'Steal Without Photo' : 'Claim Without Photo'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       )}
@@ -463,10 +664,9 @@ const styles = StyleSheet.create({
   inactiveIcon: { fontSize: 48, marginBottom: 12 },
   inactiveTitle: { fontSize: 22, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
   inactiveSub: { fontSize: 15, color: '#888', textAlign: 'center' },
-  frozenTitle: { fontSize: 24, fontWeight: 'bold', color: '#3498db', marginBottom: 8 },
-  frozenSub: { fontSize: 15, color: '#888', textAlign: 'center' },
   statusText: { fontSize: 15, color: '#666', marginBottom: 4 },
-  challengePreview: { fontSize: 13, color: '#888', fontStyle: 'italic', marginBottom: 8 },
+  challengePreview: { fontSize: 13, color: '#888', fontStyle: 'italic', marginBottom: 8, textAlign: 'center' },
+  exitInfo: { fontSize: 14, color: '#e67e22', textAlign: 'center', marginBottom: 12, fontWeight: '600' },
   stealWarning: { fontSize: 14, color: '#e74c3c', marginTop: 12, textAlign: 'center' },
   stealContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 24 },
   stealIcon: { fontSize: 48, marginBottom: 12 },
@@ -475,7 +675,9 @@ const styles = StyleSheet.create({
   challengePrompt: { fontSize: 16, color: '#333', textAlign: 'center', marginVertical: 16, lineHeight: 24 },
   challengeButtons: { gap: 12, width: '100%', marginTop: 8 },
   challengeBtn: { paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  attemptedText: { fontSize: 14, color: '#888', fontStyle: 'italic', marginTop: 12 },
+  pendingText: { fontSize: 15, color: '#555', textAlign: 'center', marginVertical: 16, lineHeight: 24 },
+  penaltyNote: { fontSize: 12, color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 4, lineHeight: 18 },
+  attemptedText: { fontSize: 14, color: '#888', fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
   resultIcon: { fontSize: 48, marginBottom: 12 },
   resultSub: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 8 },
   container: { flex: 1, backgroundColor: '#f5f5f5' },

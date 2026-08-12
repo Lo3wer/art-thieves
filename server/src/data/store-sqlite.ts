@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, sql, gt } from 'drizzle-orm';
 import { getDb } from './db';
 import * as s from './schema';
 import type {
@@ -9,11 +9,13 @@ import type {
   Landmark,
   LandmarkState,
   ChallengeAttempt,
+  ChallengeOutcome,
   LocationPing,
   TagEvent,
   PushToken,
   LogEntry,
   Photo,
+  Penalty,
 } from './types';
 import { generateJoinCode, createDefaultMap } from './helpers';
 
@@ -141,8 +143,8 @@ export const store = {
     return state;
   },
 
-  // Challenge attempts
-  getChallengeAttempt: (gameId: string, landmarkId: string, teamId: string): ChallengeAttempt | null =>
+  // Challenge sessions
+  getChallengeSession: (gameId: string, landmarkId: string, teamId: string): ChallengeAttempt | null =>
     (getDb()
       .select()
       .from(s.challengeAttempts)
@@ -152,14 +154,103 @@ export const store = {
         eq(s.challengeAttempts.teamId, teamId)
       ))
       .get() as ChallengeAttempt | undefined) ?? null,
-  addChallengeAttempt: (gameId: string, landmarkId: string, teamId: string, outcome: ChallengeAttempt['outcome']): ChallengeAttempt => {
+  getChallengeSessionsByGame: (gameId: string): ChallengeAttempt[] =>
+    getDb().select().from(s.challengeAttempts).where(eq(s.challengeAttempts.gameId, gameId)).all() as ChallengeAttempt[],
+  getChallengeSessionsForLandmark: (gameId: string, landmarkId: string): ChallengeAttempt[] =>
+    getDb()
+      .select()
+      .from(s.challengeAttempts)
+      .where(and(eq(s.challengeAttempts.gameId, gameId), eq(s.challengeAttempts.landmarkId, landmarkId)))
+      .all() as ChallengeAttempt[],
+  startChallengeSession: (
+    gameId: string,
+    landmarkId: string,
+    teamId: string,
+    delayMinutes?: number
+  ): ChallengeAttempt => {
+    const existing = store.getChallengeSession(gameId, landmarkId, teamId);
+    if (existing) return existing;
+    const startedAt = new Date().toISOString();
+    const readyAt = delayMinutes
+      ? new Date(Date.now() + delayMinutes * 60 * 1000).toISOString()
+      : undefined;
     const attempt: ChallengeAttempt = {
-      id: uuid(), gameId, landmarkId, teamId, outcome,
-      createdAt: new Date().toISOString(),
+      id: uuid(), gameId, landmarkId, teamId,
+      status: delayMinutes ? 'pending' : 'ready',
+      startedAt,
+      ...(readyAt ? { readyAt } : {}),
     };
     getDb().insert(s.challengeAttempts).values(attempt).run();
     return attempt;
   },
+  resolveChallengeSession: (
+    gameId: string,
+    landmarkId: string,
+    teamId: string,
+    outcome: ChallengeOutcome,
+    penaltyUntil?: string
+  ): ChallengeAttempt => {
+    let session = store.getChallengeSession(gameId, landmarkId, teamId);
+    if (!session) {
+      session = store.startChallengeSession(gameId, landmarkId, teamId);
+    }
+    if (session.status === 'complete' || session.status === 'fail' || session.status === 'pass') {
+      return session;
+    }
+    const completedAt = new Date().toISOString();
+    getDb().update(s.challengeAttempts).set({
+      status: outcome,
+      outcome,
+      completedAt,
+      ...(penaltyUntil ? { penaltyUntil } : {}),
+    }).where(eq(s.challengeAttempts.id, session.id)).run();
+    return store.getChallengeSession(gameId, landmarkId, teamId) as ChallengeAttempt;
+  },
+  voidPendingChallenges: (gameId: string, landmarkId: string, exceptTeamId?: string): string[] => {
+    const pending = store
+      .getChallengeSessionsForLandmark(gameId, landmarkId)
+      .filter((a) => a.status === 'pending' && a.teamId !== exceptTeamId);
+    const voided: string[] = [];
+    const completedAt = new Date().toISOString();
+    for (const a of pending) {
+      getDb().update(s.challengeAttempts).set({ status: 'voided', completedAt }).where(eq(s.challengeAttempts.id, a.id)).run();
+      voided.push(a.teamId);
+    }
+    return voided;
+  },
+
+  // Penalties
+  setPenalty: (gameId: string, teamId: string, type: Penalty['type'], until: string): Penalty => {
+    const existing = getDb()
+      .select()
+      .from(s.penalties)
+      .where(and(eq(s.penalties.gameId, gameId), eq(s.penalties.teamId, teamId), eq(s.penalties.type, type)))
+      .get() as Penalty | undefined;
+    if (existing) {
+      getDb().update(s.penalties).set({ until }).where(eq(s.penalties.id, existing.id)).run();
+      return { ...existing, until };
+    }
+    const penalty: Penalty = { id: uuid(), gameId, teamId, type, until };
+    getDb().insert(s.penalties).values(penalty).run();
+    return penalty;
+  },
+  getPenalty: (gameId: string, teamId: string, type: Penalty['type']): Penalty | null =>
+    (getDb()
+      .select()
+      .from(s.penalties)
+      .where(and(
+        eq(s.penalties.gameId, gameId),
+        eq(s.penalties.teamId, teamId),
+        eq(s.penalties.type, type),
+        gt(s.penalties.until, new Date().toISOString())
+      ))
+      .get() as Penalty | undefined) ?? null,
+  getPenaltiesByGame: (gameId: string): Penalty[] =>
+    getDb()
+      .select()
+      .from(s.penalties)
+      .where(and(eq(s.penalties.gameId, gameId), gt(s.penalties.until, new Date().toISOString())))
+      .all() as Penalty[],
 
   // Location pings
   addLocationPing: (gameId: string, teamId: string, latitude: number, longitude: number): LocationPing => {

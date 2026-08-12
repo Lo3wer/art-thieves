@@ -20,6 +20,7 @@ const EVENT_ICONS: Record<string, string> = {
   challenge_complete: '🔒',
   challenge_fail: '❌',
   challenge_pass: '➡️',
+  challenge_voided: '💥',
   tag_created: '🏷️',
   tag_disputed: '🔄',
 };
@@ -57,6 +58,8 @@ function getEventText(entry: LogEntry): string {
       return `${data.teamName ?? 'Unknown'} failed challenge on ${data.landmarkName ?? 'a landmark'}`;
     case 'challenge_pass':
       return `${data.teamName ?? 'Unknown'} passed challenge on ${data.landmarkName ?? 'a landmark'}`;
+    case 'challenge_voided':
+      return `${data.teamName ?? 'Unknown'}'s challenge on ${data.landmarkName ?? 'a landmark'} was voided (another team locked it)`;
     case 'tag_created':
       return `${data.taggerName ?? 'Unknown'} tagged ${data.targetName ?? 'Unknown'}`;
     case 'tag_disputed':
