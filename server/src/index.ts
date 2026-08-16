@@ -26,6 +26,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(getUploadsDir()));
 
+app.get('/healthz', (_req, res) => res.json({ ok: true }));
+
 app.use('/api', routes);
 
 setIO(io);
