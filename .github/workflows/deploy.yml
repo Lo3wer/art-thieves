@@ -1,0 +1,19 @@
+name: Deploy to Oracle
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.ORACLE_HOST }}
+          username: ${{ secrets.ORACLE_USER }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          script: |
+            cd /opt/art-thieves && git pull --ff-only
+            cd server && docker compose up -d --build
+            docker image prune -f
