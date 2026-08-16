@@ -20,7 +20,7 @@ export function isPersistent(): boolean {
 export function getUploadsDir(): string {
   if (!uploadsPath) {
     uploadsPath = isPersistent()
-      ? path.join(process.cwd(), 'uploads')
+      ? process.env.UPLOADS_DIR ?? path.join(process.cwd(), 'uploads')
       : fs.mkdtempSync(path.join(os.tmpdir(), 'vat-uploads-'));
   }
   return uploadsPath;
