@@ -13,6 +13,7 @@ import {
   photoMetadataSchema,
 } from '../middleware/validation';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
+import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
 import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
 import { photoUpload } from '../middleware/upload';
@@ -135,6 +136,7 @@ router.post('/games/:id/start', (req, res) => {
     startedAt: new Date().toISOString(),
   });
   store.addLogEntry(game.id, 'game_started', {});
+  scheduleGameEnd(game.id);
   broadcastState(game.id);
   res.json(updated);
 });
@@ -153,6 +155,7 @@ router.put('/games/:id/pause', (req, res) => {
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
   store.updateGame(game.id, { status: 'paused', pausedAt: new Date().toISOString() });
+  cancelGameEnd(game.id);
   store.addLogEntry(game.id, 'game_paused', {});
   broadcastToGame(game.id, 'game_paused', {});
   broadcastState(game.id);
@@ -170,6 +173,7 @@ router.put('/games/:id/resume', (req, res) => {
     totalPausedMs: game.totalPausedMs + pausedMs,
   });
   store.addLogEntry(game.id, 'game_resumed', {});
+  scheduleGameEnd(game.id);
   broadcastToGame(game.id, 'game_resumed', {});
   broadcastState(game.id);
   res.json({ status: 'active' });
@@ -183,6 +187,7 @@ router.put('/games/:id/end', (req, res) => {
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
   store.updateGame(game.id, { status: 'ended' });
+  cancelGameEnd(game.id);
   store.addLogEntry(game.id, 'game_ended', result);
   broadcastToGame(game.id, 'game_ended', { ...result, scores });
   broadcastState(game.id);
@@ -220,6 +225,7 @@ function checkWinAndEnd(gameId: string): void {
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
   if (win.winner) {
     store.updateGame(gameId, { status: 'ended' });
+    cancelGameEnd(gameId);
     store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     broadcastToGame(gameId, 'game_ended', win);
   }

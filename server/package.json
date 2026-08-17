@@ -10,7 +10,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "test:kml": "tsx src/data/kml.test.ts"
+    "test:kml": "tsx src/data/kml.test.ts",
+    "cleanup": "tsx src/scripts/cleanup.ts"
   },
   "dependencies": {
     "@tmcw/togeojson": "^7.1.2",

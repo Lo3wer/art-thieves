@@ -45,6 +45,7 @@ export const store = {
   },
 
   // Games
+  getGames: () => [...games],
   getGame: (id: string) => games.find((g) => g.id === id) ?? null,
   getGameByJoinCode: (code: string) => games.find((g) => g.joinCode === code) ?? null,
   createGame: (mapId: string, config: Game['config']) => {

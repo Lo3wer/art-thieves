@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/errorHandler';
 import routes from './routes';
 import { registerGameHandlers } from './socket/handlers';
 import { setIO } from './socket/broadcast';
+import { rescheduleAllActiveGames } from './game/timer';
 import { initDb, isPersistent, getUploadsDir } from './data/db';
 
 if (isPersistent()) {
@@ -36,6 +37,7 @@ registerGameHandlers(io);
 app.use(errorHandler);
 
 server.listen(PORT, '0.0.0.0', () => {
+  rescheduleAllActiveGames();
   const nets = networkInterfaces();
   const ip =
     Object.values(nets)

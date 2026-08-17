@@ -35,6 +35,7 @@ export const store = {
   },
 
   // Games
+  getGames: (): Game[] => getDb().select().from(s.games).all() as Game[],
   getGame: (id: string): Game | null =>
     (getDb().select().from(s.games).where(eq(s.games.id, id)).get() as Game | undefined) ?? null,
   getGameByJoinCode: (code: string): Game | null =>

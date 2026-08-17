@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
+import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
 import { broadcastState, seedSnapshot } from './broadcast';
 
 const FREEZE_MS = 10 * 60 * 1000;
@@ -154,6 +155,7 @@ function processClaim(
 
   if (win.winner) {
     store.updateGame(gameId, { status: 'ended' });
+    cancelGameEnd(gameId);
     store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     nsp.to(`game:${gameId}`).emit('game_ended', { winnerId: win.winner, scores });
   }
@@ -201,6 +203,7 @@ function processChallenge(
 
   if (win.winner) {
     store.updateGame(gameId, { status: 'ended' });
+    cancelGameEnd(gameId);
     store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     nsp.to(`game:${gameId}`).emit('game_ended', { winnerId: win.winner, scores });
   }
@@ -272,6 +275,7 @@ function processPause(gameId: string, socket: Socket, nsp: ReturnType<Server['of
   const game = getGameOrThrow(gameId);
   if (game.status !== 'active') throw new Error('Game is not active');
   store.updateGame(gameId, { status: 'paused', pausedAt: new Date().toISOString() });
+  cancelGameEnd(gameId);
   store.addLogEntry(gameId, 'game_paused', {});
   broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_paused', {});
@@ -282,6 +286,7 @@ function processResume(gameId: string, socket: Socket, nsp: ReturnType<Server['o
   if (game.status !== 'paused') throw new Error('Game is not paused');
   const pausedMs = game.pausedAt ? Date.now() - new Date(game.pausedAt).getTime() : 0;
   store.updateGame(gameId, { status: 'active', pausedAt: undefined, totalPausedMs: game.totalPausedMs + pausedMs });
+  scheduleGameEnd(gameId);
   store.addLogEntry(gameId, 'game_resumed', {});
   broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_resumed', {});
@@ -294,6 +299,7 @@ function processEnd(gameId: string, socket: Socket, nsp: ReturnType<Server['of']
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
   store.updateGame(gameId, { status: 'ended' });
+  cancelGameEnd(gameId);
   store.addLogEntry(gameId, 'game_ended', result);
   broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_ended', { ...result, scores });
