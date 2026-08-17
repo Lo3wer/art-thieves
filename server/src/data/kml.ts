@@ -157,8 +157,9 @@ export function buildMapFromFile(
     throw new Error('No landmark points found in the KML/KMZ file');
   }
   const { centerLat, centerLng } = computeCenter(features);
+  const baseName = path.basename(filename).replace(/\.[^.]+$/, '');
   return {
-    name: opts.name?.trim() || documentName || 'Imported Map',
+    name: opts.name?.trim() || baseName || documentName || 'Imported Map',
     centerLat,
     centerLng,
     defaultZoom: opts.defaultZoom ?? DEFAULT_ZOOM,

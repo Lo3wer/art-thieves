@@ -37,10 +37,10 @@ const SAMPLE_KML = `<?xml version="1.0" encoding="UTF-8"?>
 
 describe('kml map import', () => {
   test('parses points, polygons and ExtendedData into a FeatureCollection', () => {
-    const map = buildMapFromFile(Buffer.from(SAMPLE_KML, 'utf-8'), 'map.kml');
+    const map = buildMapFromFile(Buffer.from(SAMPLE_KML, 'utf-8'), 'Downtown Walk.kml');
     const features = (map.data as any).features;
 
-    assert.equal(map.name, 'Vancouver Art Walk');
+    assert.equal(map.name, 'Downtown Walk');
     assert.equal(features.length, 3);
 
     const landmark = features[0];
