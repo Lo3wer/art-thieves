@@ -27,7 +27,7 @@ export function cancelGameEnd(gameId: string): void {
 
 function endGame(gameId: string): void {
   const game = store.getGame(gameId);
-  if (!game || game.status === 'ended') return;
+  if (!game || game.status === 'ended' || game.status === 'paused') return;
   const teams = store.getTeamsByGame(gameId);
   const states = store.getLandmarkStates(gameId);
   const scores = computeScoreboard(teams, states);

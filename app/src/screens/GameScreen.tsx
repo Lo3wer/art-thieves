@@ -6,6 +6,7 @@ import {
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import { getActiveElapsedMs } from '../utils/gameTime';
 import FrozenBar from '../components/FrozenBar';
 
 interface ScoreEntry {
@@ -28,20 +29,20 @@ export default function GameScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!game || game.status !== 'active') return;
-    const started = game.startedAt ? new Date(game.startedAt).getTime() : Date.now();
-    const endTime = started + game.config.duration * 1000;
+    if (!game || !game.startedAt) return;
 
     const tick = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+      const g = useGameStore.getState().game;
+      if (!g || !g.startedAt || g.status !== 'active') return;
+      const elapsed = getActiveElapsedMs(g.startedAt, g.totalPausedMs, g.pausedAt, g.status);
+      const remaining = Math.max(0, Math.floor((g.config.duration * 1000 - elapsed) / 1000));
       setTimeLeft(remaining);
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [game?.id, game?.status, game?.startedAt, game?.config.duration]);
+  }, [game?.id, game?.status, game?.startedAt, game?.totalPausedMs, game?.config.duration]);
 
   const handlePause = async () => {
     if (!game) return;

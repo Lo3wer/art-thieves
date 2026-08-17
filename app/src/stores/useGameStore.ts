@@ -53,6 +53,7 @@ export const useGameStore = create<GameStore>((set) => ({
       if (diff.status !== undefined) next.status = diff.status;
       if (diff.startedAt !== undefined) next.startedAt = diff.startedAt;
       if (diff.pausedAt !== undefined) next.pausedAt = diff.pausedAt;
+      else if ('pausedAt' in diff) next.pausedAt = undefined;
       if (diff.totalPausedMs !== undefined) next.totalPausedMs = diff.totalPausedMs;
       if (diff.config) next.config = diff.config;
       if (diff.addedTeams) next.teams = [...game.teams, ...diff.addedTeams];
