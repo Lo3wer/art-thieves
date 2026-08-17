@@ -1,29 +1,29 @@
 import type { Game, GameMap, Team, GameConfig, GameSummary, LocationPing, Photo, GameTimeline } from '../types';
 import { API_BASE } from '../../api';
-import { fetch } from 'expo/fetch';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import { ApiError, NetworkError, describeError } from './errors';
+
+export { ApiError, NetworkError, describeError };
 
 const USE_MOCKS = false;
-
-export class ApiError extends Error {
-  status: number;
-  data?: any;
-  constructor(status: number, message: string, data?: any) {
-    super(message);
-    this.status = status;
-    this.data = data;
-  }
-}
 
 async function request<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const url = `${API_BASE}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+  } catch (err) {
+    const cause = err instanceof Error ? err : new Error(String(err));
+    const detail = (cause as any)?.cause ? String((cause as any).cause) : cause.message;
+    throw new NetworkError(url, `Network request failed for ${path}: ${detail}`, err);
+  }
   if (!res.ok) {
     let body: any;
     try {
@@ -34,7 +34,8 @@ async function request<T>(
     throw new ApiError(
       res.status,
       typeof body === 'string' ? body : body.error ?? `HTTP ${res.status}`,
-      typeof body === 'object' && body.data ? body.data : undefined
+      typeof body === 'object' && body.data ? body.data : undefined,
+      url
     );
   }
   return res.json();

@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
-import { api, ApiError } from '../services/api';
+import { api, ApiError, describeError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
@@ -27,6 +27,8 @@ export default function LobbyScreen() {
   const [view, setView] = useState<LobbyView>('home');
   const [loading, setLoading] = useState(false);
   const [maps, setMaps] = useState<GameMap[]>([]);
+  const [loadingMaps, setLoadingMaps] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<GameMap | null>(null);
   const [config, setConfig] = useState<GameConfig>(DEFAULT_CONFIG);
   const [joinCode, setJoinCode] = useState('');
@@ -46,12 +48,18 @@ export default function LobbyScreen() {
   const setAvailableMaps = useLobbyStore((s) => s.setAvailableMaps);
 
   const loadMaps = useCallback(async () => {
+    setLoadingMaps(true);
+    setMapError(null);
     try {
       const result = await api.fetchMaps();
       setMaps(result);
       setAvailableMaps(result);
     } catch (e) {
-      Alert.alert('Error', 'Failed to load maps');
+      const msg = describeError(e);
+      setMapError(msg);
+      Alert.alert('Error loading maps', msg);
+    } finally {
+      setLoadingMaps(false);
     }
   }, [setAvailableMaps]);
 
@@ -128,8 +136,11 @@ export default function LobbyScreen() {
       setView('waiting');
     } catch (e: any) {
       const msg = e.message ?? 'Failed to join game';
-      if (e instanceof ApiError && e.data?.existing) {
-        const taken = e.data.existing.map((t: any) => `${t.name} (${t.color})`).join(', ');
+      const existing = (e as ApiError).data as
+        | { existing?: { name: string; color: string }[] }
+        | undefined;
+      if (e instanceof ApiError && existing?.existing) {
+        const taken = existing.existing.map((t) => `${t.name} (${t.color})`).join(', ');
         Alert.alert('Already Taken', `${msg}\n\nExisting teams: ${taken}`);
       } else {
         Alert.alert('Error', msg);
@@ -233,28 +244,43 @@ export default function LobbyScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Select Map</Text>
-        <FlatList
-          data={maps}
-          keyExtractor={(m) => m.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[
-                styles.mapItem,
-                selectedMap?.id === item.id && styles.mapItemSelected,
-              ]}
-              onPress={() => {
-                setSelectedMap(item);
-                setView('host_settings');
-              }}
-            >
-              <Text style={styles.mapName}>{item.name}</Text>
-              <Text style={styles.mapDetail}>
-                {item.landmarkCount ?? item.data?.features?.filter((f: any) => f.properties?.type === 'landmark').length ?? 0} landmarks
-              </Text>
+        {loadingMaps && maps.length === 0 ? (
+          <View style={styles.mapLoading}>
+            <ActivityIndicator size="large" color="#1a1a2e" />
+            <Text style={styles.mapLoadingText}>Loading maps...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={maps}
+            keyExtractor={(m) => m.id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.mapItem,
+                  selectedMap?.id === item.id && styles.mapItemSelected,
+                ]}
+                onPress={() => {
+                  setSelectedMap(item);
+                  setView('host_settings');
+                }}
+              >
+                <Text style={styles.mapName}>{item.name}</Text>
+                <Text style={styles.mapDetail}>
+                  {item.landmarkCount ?? item.data?.features?.filter((f: any) => f.properties?.type === 'landmark').length ?? 0} landmarks
+                </Text>
+              </TouchableOpacity>
+            )}
+            style={styles.list}
+          />
+        )}
+        {mapError && maps.length === 0 && (
+          <View style={styles.mapErrorCard}>
+            <Text style={styles.mapErrorText}>Couldn't load maps: {mapError}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadMaps}>
+              <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
-          )}
-          style={styles.list}
-        />
+          </View>
+        )}
         <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('home')}>
           <Text style={styles.secondaryButtonText}>Back</Text>
         </TouchableOpacity>
@@ -462,6 +488,18 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#eee',
   },
   mapItemSelected: { borderColor: '#1a1a2e', borderWidth: 2 },
+  mapLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  mapLoadingText: { marginTop: 12, fontSize: 16, color: '#666' },
+  mapErrorCard: {
+    backgroundColor: '#fdecea', borderRadius: 10, padding: 14,
+    borderWidth: 1, borderColor: '#e74c3c', marginBottom: 12,
+  },
+  mapErrorText: { color: '#c0392b', fontSize: 13, marginBottom: 10 },
+  retryButton: {
+    backgroundColor: '#1a1a2e', paddingVertical: 10, paddingHorizontal: 20,
+    borderRadius: 8, alignSelf: 'flex-start',
+  },
+  retryButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   mapName: { fontSize: 16, fontWeight: '600', color: '#1a1a2e' },
   mapDetail: { fontSize: 13, color: '#888', marginTop: 2 },
   selectedMapCard: {
