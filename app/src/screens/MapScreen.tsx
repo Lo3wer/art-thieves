@@ -257,7 +257,7 @@ export default function MapScreen() {
           </Text>
         </View>
       )}
-      <Map style={styles.map} mapStyle={MAP_STYLE}>
+      <Map style={styles.map} mapStyle={MAP_STYLE} androidView="texture">
         <Camera
           initialViewState={{
             center: mapMeta ? [mapMeta.center.lng, mapMeta.center.lat] : DEFAULT_CENTER,

@@ -1,4 +1,3 @@
-import { File } from 'expo-file-system';
 import { API_BASE } from '../../api';
 import { useTeamStore } from '../stores/useTeamStore';
 import { ApiError, NetworkError } from './errors';
@@ -9,8 +8,10 @@ export async function uploadPhoto(
   uri: string
 ): Promise<{ photoId: string; url: string }> {
   const teamId = useTeamStore.getState().myTeamId ?? '';
+  const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const type = ext === 'png' ? 'image/png' : 'image/jpeg';
   const form = new FormData();
-  form.append('photo', new File(uri));
+  form.append('photo', { uri, name: `photo.${ext}`, type } as any);
   form.append('teamId', teamId);
   form.append('landmarkId', landmarkId);
 
