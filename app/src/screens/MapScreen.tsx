@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker as MapMarker } from '@maplibre/maplibre-react-native';
 import { FontAwesome } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
@@ -14,6 +13,7 @@ import { emitLocation } from '../services/socket';
 import { api } from '../services/api';
 import {
   isMockLocationEnabled,
+  isMockLocationActive,
   startMockLocation,
   stopMockLocation,
   jumpTo,
@@ -104,23 +104,6 @@ export default function MapScreen() {
       : fallback;
   }, [mapMeta]);
 
-  useEffect(() => {
-    if (isMockLocationEnabled()) return;
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({});
-      setOwnLocation(loc.coords.latitude, loc.coords.longitude);
-      Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 5000 },
-        (loc) => {
-          setOwnLocation(loc.coords.latitude, loc.coords.longitude);
-          emitLocation(loc.coords.latitude, loc.coords.longitude);
-        }
-      );
-    })();
-  }, [setOwnLocation]);
-
   const mockRoute = useMemo(
     () =>
       game
@@ -129,7 +112,14 @@ export default function MapScreen() {
     [game]
   );
 
-  const [mockWalking, setMockWalking] = useState(false);
+  const [mockWalking, setMockWalking] = useState(
+    () => isMockLocationEnabled() && isMockLocationActive()
+  );
+
+  useEffect(() => {
+    if (!isMockLocationEnabled()) return;
+    setMockWalking(isMockLocationActive());
+  }, [game?.id, game?.status]);
 
   const handleStartWalk = useCallback(() => {
     startMockLocation(mockRoute, (lat, lng) => {
@@ -143,24 +133,6 @@ export default function MapScreen() {
     stopMockLocation();
     setMockWalking(false);
   }, []);
-
-  useEffect(() => {
-    if (!isMockLocationEnabled() || !game) return;
-    return () => stopMockLocation();
-  }, [game?.id]);
-
-  const mockStartedForGame = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isMockLocationEnabled() || !game || mockRoute.length === 0) return;
-    if (mockStartedForGame.current === game.id) return;
-    mockStartedForGame.current = game.id;
-    startMockLocation(mockRoute, (lat, lng) => {
-      setOwnLocation(lat, lng);
-      emitLocation(lat, lng);
-    });
-    setMockWalking(true);
-  }, [game?.id, mockRoute, setOwnLocation]);
 
   useEffect(() => {
     if (!game || teamLocations.length > 0) return;
