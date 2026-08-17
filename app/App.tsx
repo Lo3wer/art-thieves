@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { requestNotificationPermission } from './src/services/notifications';
-import { requestLocationPermission, syncLocationTracking } from './src/services/locationTracking';
+import { requestLocationPermission, syncLocationTracking, pauseTracking, resumeTracking } from './src/services/locationTracking';
 import { useGameStore } from './src/stores/useGameStore';
 
 export default function App() {
@@ -18,6 +19,17 @@ export default function App() {
   useEffect(() => {
     syncLocationTracking();
   }, [gameId, gameStatus]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        resumeTracking();
+      } else if (state === 'background') {
+        pauseTracking();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <SafeAreaProvider>

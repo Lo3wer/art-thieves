@@ -1,6 +1,7 @@
 import type { Server } from 'socket.io';
 import { store } from '../data/store';
 import { decorateLandmarkStates } from '../game/challenges';
+import { getFrozenTeams } from '../game/freeze';
 
 let io: Server | null = null;
 
@@ -19,19 +20,26 @@ function cloneState(state: any): any {
   return JSON.parse(JSON.stringify(state));
 }
 
-function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {
-  if (!io) return null;
+export function buildRoomState(gameId: string): any {
   const game = store.getGame(gameId);
   if (!game) return null;
   return {
+    ...game,
+    teams: store.getTeamsByGame(gameId),
+    landmarks: store.getLandmarksByGame(gameId),
+    landmarkStates: decorateLandmarkStates(gameId),
+    penalties: store.getPenaltiesByGame(gameId),
+    frozenTeams: getFrozenTeams(gameId),
+  };
+}
+
+function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {
+  if (!io) return null;
+  const state = buildRoomState(gameId);
+  if (!state) return null;
+  return {
     nsp: io.of('/game'),
-    state: {
-      ...game,
-      teams: store.getTeamsByGame(gameId),
-      landmarks: store.getLandmarksByGame(gameId),
-      landmarkStates: decorateLandmarkStates(gameId),
-      penalties: store.getPenaltiesByGame(gameId),
-    },
+    state,
   };
 }
 
@@ -101,6 +109,10 @@ export function broadcastState(gameId: string): void {
     const curPen = JSON.stringify(region.penalties);
     if (prevPen !== curPen) diff.penalties = region.penalties;
   }
+
+  const prevFrozen = JSON.stringify(prev.frozenTeams ?? null);
+  const curFrozen = JSON.stringify(region.frozenTeams ?? null);
+  if (prevFrozen !== curFrozen) diff.frozenTeams = region.frozenTeams;
 
   if (prev.teams && region.teams) {
     const prevTeamIds = new Set(prev.teams.map((t: any) => t.id));

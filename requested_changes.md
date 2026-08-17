@@ -1,5 +1,0 @@
-- indicate to other players that a given team is frozen
-  - Could be on the leaderboard or an indicator on the map
-- maintain current game rules can adjust after play testing
-- landmarks min dist vs gps precision?
-- 

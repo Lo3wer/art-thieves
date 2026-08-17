@@ -1,15 +1,10 @@
 import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
-import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
+import { startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
 import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
-import { broadcastState, seedSnapshot } from './broadcast';
-
-const FREEZE_MS = 10 * 60 * 1000;
-
-function getFrozenUntil(): string {
-  return new Date(Date.now() + FREEZE_MS).toISOString();
-}
+import { broadcastState, seedSnapshot, buildRoomState } from './broadcast';
+import { isTeamFrozen, getFrozenUntil } from '../game/freeze';
 
 export function registerGameHandlers(io: Server): void {
   const gameNsp = io.of('/game');
@@ -22,17 +17,9 @@ export function registerGameHandlers(io: Server): void {
       currentGameId = gameId;
       currentTeamId = teamId;
       socket.join(`game:${gameId}`);
-      const game = store.getGame(gameId);
-      if (game) {
-        socket.emit('state_update', {
-          game: {
-            ...game,
-            teams: store.getTeamsByGame(gameId),
-            landmarks: store.getLandmarksByGame(gameId),
-            landmarkStates: decorateLandmarkStates(gameId),
-            penalties: store.getPenaltiesByGame(gameId),
-          },
-        });
+      const state = buildRoomState(gameId);
+      if (state) {
+        socket.emit('state_update', { game: state });
         seedSnapshot(gameId);
       }
     });
@@ -110,13 +97,6 @@ function getGameOrThrow(gameId: string): NonNullable<ReturnType<typeof store.get
   const game = store.getGame(gameId);
   if (!game) throw new Error('Game not found');
   return game;
-}
-
-function isTeamFrozen(gameId: string, teamId: string): boolean {
-  const activeTag = store.getActiveTag(gameId, teamId);
-  if (!activeTag) return false;
-  const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
-  return elapsed < FREEZE_MS;
 }
 
 function processClaim(

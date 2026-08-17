@@ -7,6 +7,7 @@ import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { getActiveElapsedMs } from '../utils/gameTime';
+import { useFrozenTeams } from '../hooks/useFrozenTeams';
 import { scheduleLocalNotification } from '../services/notifications';
 import FrozenBar from '../components/FrozenBar';
 
@@ -16,7 +17,7 @@ export default function TagScreen() {
   const frozenTeams = useTeamStore((s) => s.frozenTeams);
   const tagCooldowns = useTeamStore((s) => s.tagCooldowns);
   const setTagCooldown = useTeamStore((s) => s.setTagCooldown);
-  const setFrozenTeams = useTeamStore((s) => s.setFrozenTeams);
+  const { now } = useFrozenTeams();
 
   const [noTagTimeLeft, setNoTagTimeLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,27 +27,6 @@ export default function TagScreen() {
   const otherTeams = game
     ? game.teams.filter((t) => t.id !== myTeamId)
     : [];
-
-  useEffect(() => {
-    if (!game || !myTeamId) return;
-    api.getFrozenTeams(game.id).then((list: { teamId: string; frozenUntil: string }[]) => {
-      const map: Record<string, string> = {};
-      for (const item of list) {
-        map[item.teamId] = item.frozenUntil;
-        if (item.teamId === myTeamId) {
-          useTeamStore.getState().setFrozen(true, item.frozenUntil);
-          const gameConfig = useGameStore.getState().game?.config;
-          if (gameConfig) {
-            const disputeEnd = new Date(
-              new Date(item.frozenUntil).getTime() - 600 * 1000 + (gameConfig.disputeWindow ?? 60) * 1000
-            ).toISOString();
-            useTeamStore.getState().setDisputeWindow(disputeEnd);
-          }
-        }
-      }
-      setFrozenTeams(map);
-    }).catch(() => {});
-  }, [game?.id, myTeamId, setFrozenTeams]);
 
   useEffect(() => {
     if (!game || !game.startedAt) return;
@@ -74,24 +54,6 @@ export default function TagScreen() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [game?.id, game?.startedAt, game?.config.noTagPeriod]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const s = useTeamStore.getState();
-      for (const [tid, until] of Object.entries(s.frozenTeams)) {
-        if (new Date(until).getTime() <= now) {
-          s.removeFrozenTeam(tid);
-        }
-      }
-      for (const [tid, until] of Object.entries(s.tagCooldowns)) {
-        if (new Date(until).getTime() <= now) {
-          s.removeTagCooldown(tid);
-        }
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   const confirmTag = async () => {
     if (!game || !pendingTarget) return;
@@ -128,12 +90,12 @@ export default function TagScreen() {
   const getTeamStatus = (teamId: string) => {
     const frozenUntil = frozenTeams[teamId];
     if (frozenUntil) {
-      const remaining = Math.floor((new Date(frozenUntil).getTime() - Date.now()) / 1000);
+      const remaining = Math.floor((new Date(frozenUntil).getTime() - now) / 1000);
       if (remaining > 0) return { disabled: true, label: `Frozen ${formatTime(remaining)}` };
     }
     const cdUntil = tagCooldowns[teamId];
     if (cdUntil) {
-      const remaining = Math.floor((new Date(cdUntil).getTime() - Date.now()) / 1000);
+      const remaining = Math.floor((new Date(cdUntil).getTime() - now) / 1000);
       if (remaining > 0) return { disabled: true, label: `Cooldown ${formatTime(remaining)}` };
     }
     return { disabled: false, label: '' };

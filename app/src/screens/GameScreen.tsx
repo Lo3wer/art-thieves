@@ -3,10 +3,12 @@ import {
   View, Text, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { getActiveElapsedMs } from '../utils/gameTime';
+import { useFrozenTeams } from '../hooks/useFrozenTeams';
 import FrozenBar from '../components/FrozenBar';
 
 interface ScoreEntry {
@@ -25,6 +27,8 @@ export default function GameScreen() {
   const game = useGameStore((s) => s.game);
   const updateStatus = useGameStore((s) => s.updateStatus);
   const isHost = useTeamStore((s) => s.isHost);
+  const frozenTeams = useTeamStore((s) => s.frozenTeams);
+  const { now } = useFrozenTeams();
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -140,18 +144,30 @@ export default function GameScreen() {
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.team.id}
-        renderItem={({ item, index }) => (
-          <View style={styles.scoreRow}>
-            <Text style={styles.rank}>#{index + 1}</Text>
-            <View style={[styles.teamColor, { backgroundColor: item.team.color }]} />
-            <View style={styles.scoreInfo}>
-              <Text style={styles.teamName}>{item.team.name}</Text>
-              <Text style={styles.scoreDetail}>
-                {item.claimed} claimed{item.locked > 0 ? ` (${item.locked} locked)` : ''}
-              </Text>
+        renderItem={({ item, index }) => {
+          const frozenUntil = frozenTeams[item.team.id];
+          const frozenRemaining = frozenUntil
+            ? Math.max(0, Math.floor((new Date(frozenUntil).getTime() - now) / 1000))
+            : 0;
+          return (
+            <View style={styles.scoreRow}>
+              <Text style={styles.rank}>#{index + 1}</Text>
+              <View style={[styles.teamColor, { backgroundColor: item.team.color }]} />
+              <View style={styles.scoreInfo}>
+                <Text style={styles.teamName}>{item.team.name}</Text>
+                <Text style={styles.scoreDetail}>
+                  {item.claimed} claimed{item.locked > 0 ? ` (${item.locked} locked)` : ''}
+                </Text>
+              </View>
+              {frozenRemaining > 0 && (
+                <View style={styles.frozenBadge}>
+                  <MaterialIcons name="ac-unit" size={14} color="#fff" />
+                  <Text style={styles.frozenBadgeText}>FROZEN {formatTime(frozenRemaining)}</Text>
+                </View>
+              )}
             </View>
-          </View>
-        )}
+          );
+        }}
         style={styles.list}
       />
 
@@ -212,6 +228,11 @@ const styles = StyleSheet.create({
   scoreInfo: { flex: 1 },
   teamName: { fontSize: 16, fontWeight: '600', color: '#1a1a2e' },
   scoreDetail: { fontSize: 13, color: '#888', marginTop: 2 },
+  frozenBadge: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#3498db',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 8, gap: 4,
+  },
+  frozenBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   hostControls: { flexDirection: 'row', gap: 12, marginTop: 16 },
   pauseButton: { flex: 1, backgroundColor: '#f39c12', padding: 14, borderRadius: 10, alignItems: 'center' },
   resumeButton: { flex: 1, backgroundColor: '#2ecc71', padding: 14, borderRadius: 10, alignItems: 'center' },

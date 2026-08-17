@@ -15,10 +15,9 @@ import {
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
 import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
+import { isTeamFrozen, getFrozenTeams, getFrozenUntil } from '../game/freeze';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
 import { photoUpload } from '../middleware/upload';
-
-const FREEZE_DURATION_MS = 10 * 60 * 1000;
 
 const router = Router();
 
@@ -194,28 +193,6 @@ router.put('/games/:id/end', (req, res) => {
   res.json({ ...result, scores });
 });
 
-function isTeamFrozen(gameId: string, teamId: string): boolean {
-  const activeTag = store.getActiveTag(gameId, teamId);
-  if (!activeTag) return false;
-  const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
-  return elapsed < FREEZE_DURATION_MS;
-}
-
-function getFrozenTeams(gameId: string): { teamId: string; frozenUntil: string }[] {
-  const teams = store.getTeamsByGame(gameId);
-  const frozen: { teamId: string; frozenUntil: string }[] = [];
-  for (const team of teams) {
-    const tag = store.getActiveTag(gameId, team.id);
-    if (tag) {
-      const elapsed = Date.now() - new Date(tag.timestamp).getTime();
-      if (elapsed < FREEZE_DURATION_MS) {
-        frozen.push({ teamId: team.id, frozenUntil: new Date(new Date(tag.timestamp).getTime() + FREEZE_DURATION_MS).toISOString() });
-      }
-    }
-  }
-  return frozen;
-}
-
 function checkWinAndEnd(gameId: string): void {
   const game = store.getGame(gameId);
   if (!game) return;
@@ -336,7 +313,7 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
   broadcastToGame(game.id, 'team_frozen', {
     teamId: targetTeamId,
     tagTimestamp: tag.timestamp,
-    frozenUntil: new Date(Date.now() + FREEZE_DURATION_MS).toISOString(),
+    frozenUntil: getFrozenUntil(tag.timestamp),
   });
   broadcastState(game.id);
   res.status(201).json(tag);

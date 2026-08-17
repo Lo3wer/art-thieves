@@ -7,6 +7,22 @@ import { useLogStore } from '../stores/useLogStore';
 
 let socket: Socket | null = null;
 
+function applyFrozenTeams(frozen: { teamId: string; frozenUntil: string }[]): void {
+  const teamStore = useTeamStore.getState();
+  const map: Record<string, string> = {};
+  for (const item of frozen) map[item.teamId] = item.frozenUntil;
+  teamStore.setFrozenTeams(map);
+  const myId = teamStore.myTeamId;
+  if (myId) {
+    if (map[myId]) {
+      teamStore.setFrozen(true, map[myId]);
+    } else {
+      teamStore.setFrozen(false);
+      teamStore.setDisputeWindow(null);
+    }
+  }
+}
+
 export function connectSocket(gameId: string, teamId: string): Socket {
   if (socket?.connected) {
     socket.emit('join_game', { gameId, teamId });
@@ -24,8 +40,10 @@ export function connectSocket(gameId: string, teamId: string): Socket {
 
   socket.on('state_update', (data: { game?: any; diff?: any }) => {
     if (data.game) {
+      if (data.game.frozenTeams) applyFrozenTeams(data.game.frozenTeams);
       useGameStore.getState().setGame(data.game);
     } else if (data.diff) {
+      if (data.diff.frozenTeams) applyFrozenTeams(data.diff.frozenTeams);
       useGameStore.getState().applyDiff(data.diff);
     }
   });

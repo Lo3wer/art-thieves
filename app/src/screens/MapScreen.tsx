@@ -9,7 +9,7 @@ import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
-import { emitLocation } from '../services/socket';
+import { maybeEmitLocation } from '../services/locationTracking';
 import { api } from '../services/api';
 import {
   isMockLocationEnabled,
@@ -124,7 +124,7 @@ export default function MapScreen() {
   const handleStartWalk = useCallback(() => {
     startMockLocation(mockRoute, (lat, lng) => {
       setOwnLocation(lat, lng);
-      emitLocation(lat, lng);
+      maybeEmitLocation(lat, lng);
     });
     setMockWalking(true);
   }, [mockRoute, setOwnLocation]);

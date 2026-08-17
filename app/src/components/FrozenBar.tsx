@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTeamStore } from '../stores/useTeamStore';
 import { useGameStore } from '../stores/useGameStore';
 import { api } from '../services/api';
@@ -66,7 +67,7 @@ export default function FrozenBar() {
     <>
       <View style={styles.frozenBar}>
         <View style={styles.frozenBarContent}>
-          <Text style={styles.frozenBarIcon}>🧊</Text>
+          <MaterialIcons name="ac-unit" size={24} color="#3498db" style={styles.frozenBarIcon} />
           <View style={styles.frozenBarInfo}>
             <Text style={styles.frozenBarTitle}>YOU ARE FROZEN</Text>
             {freezeCountdown != null && (
@@ -88,7 +89,7 @@ export default function FrozenBar() {
       {showDisputeModal && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalIcon}>🔄</Text>
+            <MaterialIcons name="refresh" size={40} color="#e74c3c" style={styles.modalIcon} />
             <Text style={styles.modalTitle}>Dispute Tag?</Text>
             <Text style={styles.modalDesc}>
               Claim that you were not tagged fairly. The tag will be voided.
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#b3d9f2',
   },
   frozenBarContent: { flexDirection: 'row', alignItems: 'center' },
-  frozenBarIcon: { fontSize: 24, marginRight: 10 },
+  frozenBarIcon: { marginRight: 10 },
   frozenBarInfo: { flex: 1 },
   frozenBarTitle: { fontSize: 14, fontWeight: 'bold', color: '#3498db' },
   frozenBarTimer: { fontSize: 13, color: '#555', marginTop: 2 },
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 16, padding: 24, marginHorizontal: 32,
     alignItems: 'center', elevation: 10,
   },
-  modalIcon: { fontSize: 40, marginBottom: 12 },
+  modalIcon: { marginBottom: 12 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
   modalDesc: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
   modalButtons: { flexDirection: 'row', gap: 12 },
