@@ -14,7 +14,7 @@ import type {
   Photo,
   Penalty,
 } from './types';
-import { generateJoinCode, createDefaultMap } from './helpers';
+import { generateJoinCode } from './helpers';
 import { mapsDirectory, seedMapsFromDirectory } from './kml';
 
 const maps: GameMap[] = [];
@@ -30,13 +30,6 @@ const pushTokens: PushToken[] = [];
 const photos: Photo[] = [];
 const eventLog: LogEntry[] = [];
 
-function seedDefaultMap(): void {
-  if (maps.length > 0) return;
-  maps.push(createDefaultMap());
-}
-
-seedDefaultMap();
-
 export const store = {
   // Maps
   getMaps: () => [...maps],
@@ -45,6 +38,10 @@ export const store = {
     const newMap: GameMap = { ...map, id: uuid(), createdAt: new Date().toISOString() };
     maps.push(newMap);
     return newMap;
+  },
+  deleteMap: (name: string) => {
+    const idx = maps.findIndex((m) => m.name === name);
+    if (idx !== -1) maps.splice(idx, 1);
   },
 
   // Games

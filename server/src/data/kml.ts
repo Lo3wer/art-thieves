@@ -242,9 +242,14 @@ export function mapsDirectory(): string {
 
 export function seedMapsFromDirectory(
   dir: string,
-  target: { getMaps(): { name: string }[]; addMap(m: Omit<GameMap, 'id' | 'createdAt'>): unknown }
+  target: {
+    getMaps(): { name: string }[];
+    addMap(m: Omit<GameMap, 'id' | 'createdAt'>): unknown;
+    deleteMap(name: string): void;
+  }
 ): void {
   const entries = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const available: string[] = [];
   for (const entry of entries) {
     const ext = path.extname(entry).toLowerCase();
     if (ext !== '.kml' && ext !== '.kmz') continue;
@@ -256,9 +261,16 @@ export function seedMapsFromDirectory(
       console.warn(`[maps] Skipping ${entry}: ${err.message}`);
       continue;
     }
+    available.push(map.name);
     if (!target.getMaps().some((m) => m.name === map.name)) {
       target.addMap(map);
       console.log(`[maps] Seeded map "${map.name}" from ${entry}`);
+    }
+  }
+  for (const existing of target.getMaps()) {
+    if (!available.includes(existing.name)) {
+      target.deleteMap(existing.name);
+      console.log(`[maps] Removed map "${existing.name}" (not present in ${dir})`);
     }
   }
 }

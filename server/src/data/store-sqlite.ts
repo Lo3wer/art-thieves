@@ -17,18 +17,8 @@ import type {
   Photo,
   Penalty,
 } from './types';
-import { generateJoinCode, createDefaultMap } from './helpers';
+import { generateJoinCode } from './helpers';
 import { mapsDirectory, seedMapsFromDirectory } from './kml';
-
-function seedDefaultMap(): void {
-  const db = getDb();
-  const existing = db.select({ id: s.maps.id }).from(s.maps).limit(1).get();
-  if (!existing) {
-    db.insert(s.maps).values(createDefaultMap()).run();
-  }
-}
-
-seedDefaultMap();
 
 export const store = {
   // Maps
@@ -39,6 +29,9 @@ export const store = {
     const newMap: GameMap = { ...map, id: uuid(), createdAt: new Date().toISOString() };
     getDb().insert(s.maps).values(newMap).run();
     return newMap;
+  },
+  deleteMap: (name: string): void => {
+    getDb().delete(s.maps).where(eq(s.maps.name, name)).run();
   },
 
   // Games
