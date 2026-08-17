@@ -2,7 +2,6 @@ import * as Location from 'expo-location';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { emitLocation } from './socket';
-import { haversineDistance } from '../utils/distance';
 import {
   isMockLocationEnabled,
   startMockLocation,
@@ -10,14 +9,14 @@ import {
   type MockRoutePoint,
 } from './mockLocation';
 
-const EMIT_MIN_DISTANCE_M = 15;
-const EMIT_MIN_INTERVAL_MS = 10000;
-const HIGH_ACCURACY_RADIUS_MULTIPLIER = 2;
+const WATCH_ACCURACY = Location.Accuracy.High;
+const WATCH_DISTANCE_INTERVAL = 5;
+const WATCH_TIME_INTERVAL = 5000;
+const HEARTBEAT_MS = 20000;
 
 let realWatcher: Location.LocationSubscription | null = null;
 let trackingGameId: string | null = null;
-let lastEmitted: { lat: number; lng: number; at: number } | null = null;
-let accuracyRegime: Location.Accuracy = Location.Accuracy.Balanced;
+let heartbeatId: ReturnType<typeof setInterval> | null = null;
 
 export async function requestLocationPermission(): Promise<boolean> {
   if (isMockLocationEnabled()) return true;
@@ -36,46 +35,20 @@ function routeFromGame(): MockRoutePoint[] {
   return game.landmarks.map((lm) => ({ latitude: lm.latitude, longitude: lm.longitude }));
 }
 
-function targetAccuracyForPosition(lat: number, lng: number): Location.Accuracy {
-  const game = useGameStore.getState().game;
-  if (!game || !game.landmarks || game.landmarks.length === 0) return Location.Accuracy.Balanced;
-  let nearest = Infinity;
-  for (const lm of game.landmarks) {
-    const d = haversineDistance(lat, lng, lm.latitude, lm.longitude);
-    if (d < nearest) nearest = d;
-  }
-  const threshold = (game.config.vicinityRadius ?? 30) * HIGH_ACCURACY_RADIUS_MULTIPLIER;
-  return nearest <= threshold ? Location.Accuracy.High : Location.Accuracy.Balanced;
-}
-
-export function maybeEmitLocation(lat: number, lng: number): void {
-  const at = Date.now();
-  if (lastEmitted) {
-    const dist = haversineDistance(lastEmitted.lat, lastEmitted.lng, lat, lng);
-    if (dist < EMIT_MIN_DISTANCE_M && at - lastEmitted.at < EMIT_MIN_INTERVAL_MS) {
-      return;
-    }
-  }
-  lastEmitted = { lat, lng, at };
-  emitLocation(lat, lng);
-}
-
 function handlePosition(loc: Location.LocationObject): void {
   const { latitude, longitude } = loc.coords;
   useLocationStore.getState().setOwnLocation(latitude, longitude);
-  maybeEmitLocation(latitude, longitude);
-  const target = targetAccuracyForPosition(latitude, longitude);
-  if (target !== accuracyRegime) {
-    accuracyRegime = target;
-    stopRealTracking();
-    startWatcher();
-  }
+  emitLocation(latitude, longitude);
 }
 
 function startWatcher(): void {
   if (realWatcher) return;
   Location.watchPositionAsync(
-    { accuracy: accuracyRegime, distanceInterval: 10, timeInterval: 10000 },
+    {
+      accuracy: WATCH_ACCURACY,
+      distanceInterval: WATCH_DISTANCE_INTERVAL,
+      timeInterval: WATCH_TIME_INTERVAL,
+    },
     handlePosition
   )
     .then((sub) => {
@@ -94,7 +67,7 @@ function startRealTracking(): void {
     .then((loc) => {
       const { latitude, longitude } = loc.coords;
       useLocationStore.getState().setOwnLocation(latitude, longitude);
-      maybeEmitLocation(latitude, longitude);
+      emitLocation(latitude, longitude);
     })
     .catch(() => {});
   startWatcher();
@@ -105,7 +78,21 @@ function stopRealTracking(): void {
     realWatcher.remove();
     realWatcher = null;
   }
-  lastEmitted = null;
+}
+
+function startHeartbeat(): void {
+  stopHeartbeat();
+  heartbeatId = setInterval(() => {
+    const own = useLocationStore.getState().ownLocation;
+    if (own) emitLocation(own.latitude, own.longitude);
+  }, HEARTBEAT_MS);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatId) {
+    clearInterval(heartbeatId);
+    heartbeatId = null;
+  }
 }
 
 export function syncLocationTracking(): void {
@@ -113,6 +100,7 @@ export function syncLocationTracking(): void {
     trackingGameId = null;
     stopRealTracking();
     stopMockLocation();
+    stopHeartbeat();
     return;
   }
   const gameId = useGameStore.getState().game!.id;
@@ -122,11 +110,13 @@ export function syncLocationTracking(): void {
     stopRealTracking();
     startMockLocation(routeFromGame(), (lat, lng) => {
       useLocationStore.getState().setOwnLocation(lat, lng);
-      maybeEmitLocation(lat, lng);
+      emitLocation(lat, lng);
     });
+    startHeartbeat();
   } else {
     stopMockLocation();
     startRealTracking();
+    startHeartbeat();
   }
 }
 
@@ -134,6 +124,7 @@ export function pauseTracking(): void {
   if (!trackingGameId) return;
   stopRealTracking();
   stopMockLocation();
+  stopHeartbeat();
 }
 
 export function resumeTracking(): void {
@@ -141,9 +132,10 @@ export function resumeTracking(): void {
   if (isMockLocationEnabled()) {
     startMockLocation(routeFromGame(), (lat, lng) => {
       useLocationStore.getState().setOwnLocation(lat, lng);
-      maybeEmitLocation(lat, lng);
+      emitLocation(lat, lng);
     });
   } else {
     startRealTracking();
   }
+  startHeartbeat();
 }

@@ -30,7 +30,15 @@ export function buildRoomState(gameId: string): any {
     landmarkStates: decorateLandmarkStates(gameId),
     penalties: store.getPenaltiesByGame(gameId),
     frozenTeams: getFrozenTeams(gameId),
+    locations: getLatestTeamLocations(gameId),
   };
+}
+
+function getLatestTeamLocations(gameId: string): any[] {
+  const pings = store.getLocationPings(gameId);
+  const latest = new Map<string, any>();
+  for (const p of pings) latest.set(p.teamId, p);
+  return [...latest.values()];
 }
 
 function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {

@@ -7,6 +7,7 @@ interface LocationStore {
   teamLocations: LocationPing[];
   setOwnLocation: (lat: number, lng: number) => void;
   updateTeamLocation: (ping: LocationPing) => void;
+  seedTeamLocations: (pings: LocationPing[]) => void;
   clearLocations: () => void;
 }
 
@@ -31,6 +32,13 @@ export const useLocationStore = create<LocationStore>((set) => ({
       if (ping.teamId === myTeamId) return s;
       const filtered = s.teamLocations.filter((t) => t.teamId !== ping.teamId);
       return { teamLocations: [...filtered, ping] };
+    }),
+  seedTeamLocations: (pings) =>
+    set((s) => {
+      const myTeamId = useTeamStore.getState().myTeamId;
+      const filtered = pings.filter((p) => p.teamId !== myTeamId);
+      const mine = s.teamLocations.filter((t) => t.teamId === myTeamId);
+      return { teamLocations: [...mine, ...filtered] };
     }),
   clearLocations: () => set({ ownLocation: null, teamLocations: [] }),
 }));

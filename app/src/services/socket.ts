@@ -41,6 +41,9 @@ export function connectSocket(gameId: string, teamId: string): Socket {
   socket.on('state_update', (data: { game?: any; diff?: any }) => {
     if (data.game) {
       if (data.game.frozenTeams) applyFrozenTeams(data.game.frozenTeams);
+      if (Array.isArray(data.game.locations)) {
+        useLocationStore.getState().seedTeamLocations(data.game.locations);
+      }
       useGameStore.getState().setGame(data.game);
     } else if (data.diff) {
       if (data.diff.frozenTeams) applyFrozenTeams(data.diff.frozenTeams);
