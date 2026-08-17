@@ -14,18 +14,6 @@ export function validate(schema: ZodSchema) {
   };
 }
 
-export const gameMapSchema = z.object({
-  name: z.string().min(1),
-  center: z.object({ lat: z.number(), lng: z.number() }),
-  defaultZoom: z.number().int().min(1).max(20),
-  defaultVicinityRadius: z.number().positive(),
-  winThreshold: z.number().int().positive(),
-  data: z.object({
-    type: z.literal('FeatureCollection'),
-    features: z.array(z.any()),
-  }),
-});
-
 export const createGameSchema = z.object({
   mapId: z.string().min(1),
   config: z.object({

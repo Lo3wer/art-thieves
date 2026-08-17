@@ -3,7 +3,6 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import { api, ApiError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { useGameStore } from '../stores/useGameStore';
@@ -83,31 +82,6 @@ export default function LobbyScreen() {
     }, 500);
     return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current); };
   }, [joinCode]);
-
-  const handleImportMap = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/vnd.google-earth.kml+xml',
-          'application/vnd.google-earth.kmz',
-          'application/xml',
-          'text/xml',
-          '.kml',
-          '.kmz',
-        ],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const file = result.assets[0];
-      const imported = await api.importMapFile(file.uri);
-      const updated = [...maps, imported];
-      setMaps(updated);
-      setAvailableMaps(updated);
-      Alert.alert('Success', `Imported "${imported.name}"`);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to import map. Ensure it is a valid KML or KMZ file from Google My Maps.');
-    }
-  };
 
   const handleCreateGame = async () => {
     if (!selectedMap) return;
@@ -281,9 +255,6 @@ export default function LobbyScreen() {
           )}
           style={styles.list}
         />
-        <TouchableOpacity style={styles.secondaryButton} onPress={handleImportMap}>
-          <Text style={styles.secondaryButtonText}>Import Map</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('home')}>
           <Text style={styles.secondaryButtonText}>Back</Text>
         </TouchableOpacity>

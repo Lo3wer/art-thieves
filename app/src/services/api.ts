@@ -1,7 +1,6 @@
 import type { Game, GameMap, Team, GameConfig, GameSummary, LocationPing, Photo, GameTimeline } from '../types';
 import { API_BASE } from '../../api';
 import { fetch } from 'expo/fetch';
-import { File } from 'expo-file-system';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 
@@ -52,29 +51,6 @@ export const api = USE_MOCKS
 
       fetchMaps: () => request<GameMap[]>('/api/maps'),
       getMap: (id: string) => request<GameMap>(`/api/maps/${id}`),
-      importMapFile: async (uri: string, name?: string) => {
-        const form = new FormData();
-        form.append('file', new File(uri));
-        if (name) form.append('name', name);
-        const res = await fetch(`${API_BASE}/api/maps/import`, {
-          method: 'POST',
-          body: form,
-        });
-        if (!res.ok) {
-          let body: any;
-          try {
-            body = await res.json();
-          } catch {
-            body = null;
-          }
-          throw new ApiError(
-            res.status,
-            typeof body === 'object' && body?.error ? body.error : `HTTP ${res.status}`,
-            body?.data
-          );
-        }
-        return res.json();
-      },
       createGame: (mapId: string, config: GameConfig) =>
         request<Game>('/api/games', {
           method: 'POST',

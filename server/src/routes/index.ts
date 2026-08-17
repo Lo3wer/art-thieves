@@ -3,7 +3,6 @@ import { store } from '../data/store';
 import { AppError } from '../middleware/errorHandler';
 import {
   validate,
-  gameMapSchema,
   createGameSchema,
   joinGameSchema,
   claimSchema,
@@ -16,8 +15,7 @@ import {
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { decorateLandmarkStates, startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
 import { broadcastState, broadcastToGame } from '../socket/broadcast';
-import { photoUpload, mapUpload } from '../middleware/upload';
-import { buildMapFromFile, mapDataToKml } from '../data/kml';
+import { photoUpload } from '../middleware/upload';
 
 const FREEZE_DURATION_MS = 10 * 60 * 1000;
 
@@ -50,44 +48,6 @@ router.get('/maps/:id', (req, res) => {
   if (!map) throw new AppError(404, 'Map not found');
   const { centerLat, centerLng, ...rest } = map;
   res.json({ ...rest, center: { lat: centerLat, lng: centerLng } });
-});
-
-router.post('/maps/import', mapUpload.single('file'), (req, res) => {
-  if (!req.file) throw new AppError(400, 'No file uploaded');
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  let map: ReturnType<typeof buildMapFromFile>;
-  try {
-    map = buildMapFromFile(req.file.buffer, req.file.originalname, {
-      name: body.name ? String(body.name) : undefined,
-      defaultZoom: body.defaultZoom ? Number(body.defaultZoom) : undefined,
-      defaultVicinityRadius: body.defaultVicinityRadius ? Number(body.defaultVicinityRadius) : undefined,
-      winThreshold: body.winThreshold ? Number(body.winThreshold) : undefined,
-    });
-  } catch (err: any) {
-    throw new AppError(400, err.message ?? 'Invalid map file');
-  }
-  const parsed = gameMapSchema.safeParse({
-    ...map,
-    center: { lat: map.centerLat, lng: map.centerLng },
-  });
-  if (!parsed.success) {
-    throw new AppError(
-      400,
-      `Invalid map file: ${parsed.error.issues.map((i) => i.message).join('; ')}`
-    );
-  }
-  const created = store.addMap(map);
-  res.status(201).json(created);
-});
-
-router.get('/maps/:id/export', (req, res) => {
-  const map = store.getMap(p(req.params.id));
-  if (!map) throw new AppError(404, 'Map not found');
-  const kml = mapDataToKml(map);
-  const safeName = (map.name || 'map').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'map';
-  res.setHeader('Content-Type', 'application/vnd.google-earth.kml+xml');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.kml"`);
-  res.send(kml);
 });
 
 // Games

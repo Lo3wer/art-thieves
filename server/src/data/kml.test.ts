@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import AdmZip from 'adm-zip';
-import { buildMapFromFile, mapDataToKml } from './kml';
+import { buildMapFromFile } from './kml';
 
 const SAMPLE_KML = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -82,8 +82,8 @@ describe('kml map import', () => {
   test('accepts KMZ archives', () => {
     const zip = new AdmZip();
     zip.addFile('doc.kml', Buffer.from(SAMPLE_KML, 'utf-8'));
-    const map = buildMapFromFile(zip.toBuffer(), 'map.kmz', { name: 'Custom' });
-    assert.equal(map.name, 'Custom');
+    const map = buildMapFromFile(zip.toBuffer(), 'map.kmz');
+    assert.equal(map.name, 'map');
     assert.equal((map.data as any).features.length, 3);
   });
 
@@ -100,19 +100,5 @@ describe('kml map import', () => {
       () => buildMapFromFile(Buffer.from(boundaryOnly, 'utf-8'), 'boundary.kml'),
       /No landmark points/
     );
-  });
-
-  test('round-trips through mapDataToKml', () => {
-    const map = buildMapFromFile(Buffer.from(SAMPLE_KML, 'utf-8'), 'map.kml');
-    const kml = mapDataToKml(map);
-    const reparsed = buildMapFromFile(Buffer.from(kml, 'utf-8'), 'roundtrip.kml');
-    const original = (map.data as any).features;
-    const restored = (reparsed.data as any).features;
-    assert.equal(restored.length, original.length);
-    assert.equal(restored[0].properties.name, original[0].properties.name);
-    assert.equal(restored[0].properties.challengeText, original[0].properties.challengeText);
-    assert.deepEqual(restored[0].properties.challenge, original[0].properties.challenge);
-    assert.equal(restored[1].properties.name, original[1].properties.name);
-    assert.equal(reparsed.centerLat, map.centerLat);
   });
 });

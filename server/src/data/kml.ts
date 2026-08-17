@@ -5,13 +5,6 @@ import fs from 'fs';
 import path from 'path';
 import type { GameMap } from './types';
 
-export interface MapImportOptions {
-  name?: string;
-  defaultZoom?: number;
-  defaultVicinityRadius?: number;
-  winThreshold?: number;
-}
-
 interface GeoFeature {
   type: 'Feature';
   properties: Record<string, unknown> | null;
@@ -147,8 +140,7 @@ function computeCenter(features: GeoFeature[]): { centerLat: number; centerLng: 
 
 export function buildMapFromFile(
   buffer: Buffer,
-  filename: string,
-  opts: MapImportOptions = {}
+  filename: string
 ): Omit<GameMap, 'id' | 'createdAt'> {
   const kmlString = readKmlFromFile(buffer, filename);
   const { features, documentName } = parseFeatures(kmlString);
@@ -159,82 +151,14 @@ export function buildMapFromFile(
   const { centerLat, centerLng } = computeCenter(features);
   const baseName = path.basename(filename).replace(/\.[^.]+$/, '');
   return {
-    name: opts.name?.trim() || baseName || documentName || 'Imported Map',
+    name: baseName || documentName || 'Imported Map',
     centerLat,
     centerLng,
-    defaultZoom: opts.defaultZoom ?? DEFAULT_ZOOM,
-    defaultVicinityRadius: opts.defaultVicinityRadius ?? DEFAULT_VICINITY_RADIUS,
-    winThreshold: opts.winThreshold ?? DEFAULT_WIN_THRESHOLD,
+    defaultZoom: DEFAULT_ZOOM,
+    defaultVicinityRadius: DEFAULT_VICINITY_RADIUS,
+    winThreshold: DEFAULT_WIN_THRESHOLD,
     data: { type: 'FeatureCollection', features },
   };
-}
-
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function dataXml(name: string, value: string): string {
-  return `\n        <Data name="${escapeXml(name)}"><value>${escapeXml(value)}</value></Data>`;
-}
-
-function polygonXml(coords: number[][][]): string {
-  const ring = coords.map((r) => r.map((c) => `${c[0]},${c[1]}`).join(' ')).join('\n          ');
-  return `      <Polygon>
-        <outerBoundaryIs>
-          <LinearRing><coordinates>${ring}</coordinates></LinearRing>
-        </outerBoundaryIs>
-      </Polygon>`;
-}
-
-function featureToPlacemark(f: GeoFeature): string | null {
-  const props = f.properties ?? {};
-  const geom = f.geometry;
-  let geometryXml = '';
-  if (geom.type === 'Point') {
-    const [lng, lat] = geom.coordinates as number[];
-    geometryXml = `      <Point><coordinates>${lng},${lat}</coordinates></Point>`;
-  } else if (geom.type === 'Polygon') {
-    geometryXml = polygonXml(geom.coordinates as number[][][]);
-  } else if (geom.type === 'MultiPolygon') {
-    geometryXml = (geom.coordinates as number[][][][]).map(polygonXml).join('\n');
-  } else {
-    return null;
-  }
-  const data: string[] = [];
-  if (props.challengeText) data.push(dataXml('challengeText', String(props.challengeText)));
-  if (props.challenge) data.push(dataXml('challenge', JSON.stringify(props.challenge)));
-  if (props.imageUrl) data.push(dataXml('imageUrl', String(props.imageUrl)));
-  const extended = data.length ? `\n      <ExtendedData>${data.join('')}\n      </ExtendedData>` : '';
-  return [
-    '    <Placemark>',
-    `      <name>${escapeXml(props.name ? String(props.name) : '')}</name>`,
-    extended,
-    geometryXml,
-    '    </Placemark>',
-  ]
-    .filter((line) => line.trim() !== '')
-    .join('\n');
-}
-
-export function mapDataToKml(map: Pick<GameMap, 'name' | 'data'>): string {
-  const features = ((map.data as any)?.features ?? []) as GeoFeature[];
-  const placemarks = features
-    .map(featureToPlacemark)
-    .filter((x): x is string => x !== null);
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<kml xmlns="http://www.opengis.net/kml/2.2">',
-    '  <Document>',
-    `    <name>${escapeXml(map.name)}</name>`,
-    ...placemarks,
-    '  </Document>',
-    '</kml>',
-  ].join('\n');
 }
 
 export function mapsDirectory(): string {

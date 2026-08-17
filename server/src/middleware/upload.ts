@@ -30,16 +30,3 @@ export const photoUpload = multer({
     else cb(new AppError(400, 'Only JPEG or PNG images are allowed') as unknown as Error);
   },
 });
-
-const MAP_ALLOWED_EXT = ['.kml', '.kmz'];
-const MAP_MAX_BYTES = 20 * 1024 * 1024;
-
-export const mapUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAP_MAX_BYTES },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (MAP_ALLOWED_EXT.includes(ext)) cb(null, true);
-    else cb(new AppError(400, 'Only KML or KMZ files are allowed') as unknown as Error);
-  },
-});
