@@ -4,7 +4,6 @@ import {
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { api, ApiError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { useGameStore } from '../stores/useGameStore';
@@ -88,18 +87,25 @@ export default function LobbyScreen() {
   const handleImportMap = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/geo+json', 'application/json', '*/*'],
+        type: [
+          'application/vnd.google-earth.kml+xml',
+          'application/vnd.google-earth.kmz',
+          'application/xml',
+          'text/xml',
+          '.kml',
+          '.kmz',
+        ],
+        copyToCacheDirectory: true,
       });
       if (result.canceled) return;
       const file = result.assets[0];
-      const content = await FileSystem.readAsStringAsync(file.uri);
-      const parsed = JSON.parse(content);
-      const imported = await api.importMap(parsed);
-      setMaps((prev) => [...prev, imported]);
-      setAvailableMaps([...maps, imported]);
+      const imported = await api.importMapFile(file.uri);
+      const updated = [...maps, imported];
+      setMaps(updated);
+      setAvailableMaps(updated);
       Alert.alert('Success', `Imported "${imported.name}"`);
     } catch (e) {
-      Alert.alert('Error', 'Failed to import map. Ensure it is valid GeoJSON.');
+      Alert.alert('Error', 'Failed to import map. Ensure it is a valid KML or KMZ file from Google My Maps.');
     }
   };
 

@@ -154,11 +154,8 @@ export const mockApi = {
     return map;
   },
 
-  importMap: async (data: unknown) => {
-    const map = data as GameMap;
-    map.id = uid();
-    maps.push(map);
-    return map;
+  importMapFile: async () => {
+    throw new Error('KML/KMZ map import is not supported in mock mode');
   },
 
   createGame: async (mapId: string, config: GameConfig) => {

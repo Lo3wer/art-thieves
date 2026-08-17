@@ -8,6 +8,12 @@ module.exports = {
     userInterfaceStyle: 'light',
     ios: {
       supportsTablet: true,
+      bundleIdentifier: 'com.leozhang226.vancouverartthieves',
+      infoPlist: {
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: true,
+        },
+      },
     },
     android: {
       adaptiveIcon: {
@@ -24,6 +30,9 @@ module.exports = {
     },
     plugins: ['@maplibre/maplibre-react-native'],
     extra: {
+      eas: {
+        projectId: '5c4a620f-24f2-473b-aa77-c40aab96538a',
+      },
       ...(process.env.EXPO_PUBLIC_MAP_STYLE ? { mapStyle: process.env.EXPO_PUBLIC_MAP_STYLE } : {}),
     },
   },

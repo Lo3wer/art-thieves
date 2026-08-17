@@ -11,13 +11,14 @@ import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
 import { emitLocation } from '../services/socket';
+import { api } from '../services/api';
 import {
   isMockLocationEnabled,
   startMockLocation,
   stopMockLocation,
   jumpTo,
 } from '../services/mockLocation';
-import type { Landmark, LandmarkState, LocationPing } from '../types';
+import type { Landmark, LandmarkState, LocationPing, GameMap } from '../types';
 
 const MINIMAL_MAP_STYLE: any = {
   version: 8,
@@ -50,6 +51,17 @@ const LANDMARK_HALO: Record<LandmarkState['status'], number> = {
 
 const TEAM_HALO = 32;
 
+const DEFAULT_BOUNDARY: [number, number][] = [
+  [-123.224, 49.319],
+  [-123.005, 49.319],
+  [-123.005, 49.215],
+  [-123.224, 49.215],
+  [-123.224, 49.319],
+];
+
+const DEFAULT_CENTER: [number, number] = [-123.1207, 49.2827];
+const DEFAULT_ZOOM = 14;
+
 export default function MapScreen() {
   const game = useGameStore((s) => s.game);
   const ownLocation = useLocationStore((s) => s.ownLocation);
@@ -59,13 +71,38 @@ export default function MapScreen() {
 
   const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const [boundaryCoords] = useState<[number, number][]>([
-    [-123.224, 49.319],
-    [-123.005, 49.319],
-    [-123.005, 49.215],
-    [-123.224, 49.215],
-    [-123.224, 49.319],
-  ]);
+  const [mapMeta, setMapMeta] = useState<GameMap | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setMapMeta(null);
+    if (!game?.mapId) return;
+    api
+      .getMap(game.mapId)
+      .then((m: GameMap) => {
+        if (active) setMapMeta(m);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [game?.mapId]);
+
+  const boundaryData = useMemo(() => {
+    const fallback: any = {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [DEFAULT_BOUNDARY] },
+      properties: {},
+    };
+    const features = (mapMeta?.data as any)?.features?.filter(
+      (f: any) =>
+        f.properties?.type === 'boundary' &&
+        (f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon')
+    );
+    return features && features.length > 0
+      ? { type: 'FeatureCollection', features }
+      : fallback;
+  }, [mapMeta]);
 
   useEffect(() => {
     if (isMockLocationEnabled()) return;
@@ -251,8 +288,8 @@ export default function MapScreen() {
       <Map style={styles.map} mapStyle={MAP_STYLE}>
         <Camera
           initialViewState={{
-            center: [-123.1207, 49.2827],
-            zoom: 14,
+            center: mapMeta ? [mapMeta.center.lng, mapMeta.center.lat] : DEFAULT_CENTER,
+            zoom: mapMeta?.defaultZoom ?? DEFAULT_ZOOM,
           }}
           center={cameraCenter ?? undefined}
           duration={800}
@@ -260,14 +297,7 @@ export default function MapScreen() {
 
         <GeoJSONSource
           id="boundary-source"
-          data={{
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [boundaryCoords],
-            },
-            properties: {},
-          }}
+          data={boundaryData}
         >
           <Layer
             id="boundary-fill"

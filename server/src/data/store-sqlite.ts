@@ -18,6 +18,7 @@ import type {
   Penalty,
 } from './types';
 import { generateJoinCode, createDefaultMap } from './helpers';
+import { mapsDirectory, seedMapsFromDirectory } from './kml';
 
 function seedDefaultMap(): void {
   const db = getDb();
@@ -359,3 +360,5 @@ export const store = {
     return entries;
   },
 };
+
+seedMapsFromDirectory(mapsDirectory(), store);

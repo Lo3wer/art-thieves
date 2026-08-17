@@ -15,6 +15,7 @@ import type {
   Penalty,
 } from './types';
 import { generateJoinCode, createDefaultMap } from './helpers';
+import { mapsDirectory, seedMapsFromDirectory } from './kml';
 
 const maps: GameMap[] = [];
 const games: Game[] = [];
@@ -291,3 +292,5 @@ export const store = {
     return [...entries].reverse();
   },
 };
+
+seedMapsFromDirectory(mapsDirectory(), store);
