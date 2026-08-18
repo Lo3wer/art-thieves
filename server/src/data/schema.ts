@@ -21,6 +21,7 @@ export const games = sqliteTable('games', {
   startedAt: text('started_at'),
   pausedAt: text('paused_at'),
   totalPausedMs: integer('total_paused_ms').notNull(),
+  hostTeamId: text('host_team_id'),
   createdAt: text('created_at').notNull(),
 });
 

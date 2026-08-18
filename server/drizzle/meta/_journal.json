@@ -15,6 +15,13 @@
       "when": 1786506493328,
       "tag": "0001_challenge_system_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786800000000,
+      "tag": "0002_host_team",
+      "breakpoints": true
     }
   ]
 }

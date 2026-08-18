@@ -109,11 +109,16 @@ router.post('/games/join/:joinCode', validate(joinGameSchema), (req, res) => {
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'lobby') throw new AppError(400, 'Game already started');
   try {
+    const wasEmpty = store.getTeamsByGame(game.id).length === 0;
     const team = store.addTeam(game.id, req.body.name, req.body.color);
+    if (wasEmpty) {
+      store.updateGame(game.id, { hostTeamId: team.id });
+    }
+    const freshGame = store.getGame(game.id)!;
     store.addLogEntry(game.id, 'team_joined', { teamId: team.id, teamName: team.name });
     res.status(201).json({
       game: {
-        ...game,
+        ...freshGame,
         teams: store.getTeamsByGame(game.id),
         landmarks: store.getLandmarksByGame(game.id),
         landmarkStates: decorateLandmarkStates(game.id),
@@ -125,6 +130,40 @@ router.post('/games/join/:joinCode', validate(joinGameSchema), (req, res) => {
     const existing = store.getTeamsByGame(game.id).map((t) => ({ name: t.name, color: t.color }));
     throw new AppError(409, err.message, { existing });
   }
+});
+
+router.post('/games/:id/rejoin', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const teamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
+  const team = store.getTeam(teamId);
+  if (!team || team.gameId !== game.id) throw new AppError(400, 'Invalid team for this game');
+  res.json({
+    game: {
+      ...game,
+      teams: store.getTeamsByGame(game.id),
+      landmarks: store.getLandmarksByGame(game.id),
+      landmarkStates: decorateLandmarkStates(game.id),
+      penalties: store.getPenaltiesByGame(game.id),
+    },
+    team,
+    isHost: game.hostTeamId === team.id,
+  });
+});
+
+router.post('/games/:id/kick', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const targetTeamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
+  const hostTeamId = typeof req.body?.hostTeamId === 'string' ? req.body.hostTeamId : '';
+  if (game.hostTeamId && hostTeamId && hostTeamId !== game.hostTeamId) {
+    throw new AppError(403, 'Only the host can kick players');
+  }
+  const target = store.getTeam(targetTeamId);
+  if (!target || target.gameId !== game.id) throw new AppError(404, 'Team not found');
+  broadcastToGame(game.id, 'team_kicked', { teamId: targetTeamId });
+  store.addLogEntry(game.id, 'team_kicked', { teamId: targetTeamId, teamName: target.name });
+  res.json({ ok: true });
 });
 
 router.post('/games/:id/start', (req, res) => {

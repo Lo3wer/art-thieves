@@ -144,5 +144,6 @@ export interface Game {
   startedAt?: string;
   pausedAt?: string;
   totalPausedMs: number;
+  hostTeamId?: string;
   createdAt: string;
 }
