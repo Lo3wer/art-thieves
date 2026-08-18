@@ -66,6 +66,16 @@ export const api = USE_MOCKS
           method: 'POST',
           body: JSON.stringify({ name, color }),
         }),
+      rejoin: (gameId: string, teamId: string) =>
+        request<{ game: Game; team: Team; isHost: boolean }>(`/api/games/${gameId}/rejoin`, {
+          method: 'POST',
+          body: JSON.stringify({ teamId }),
+        }),
+      kickTeam: (gameId: string, teamId: string, hostTeamId: string) =>
+        request<void>(`/api/games/${gameId}/kick`, {
+          method: 'POST',
+          body: JSON.stringify({ teamId, hostTeamId }),
+        }),
       getGame: (gameId: string) => request<Game>(`/api/games/${gameId}`),
       updateConfig: (gameId: string, config: Partial<GameConfig>) =>
         request<void>(`/api/games/${gameId}/config`, {

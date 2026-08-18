@@ -1,9 +1,11 @@
 import { io, Socket } from 'socket.io-client';
+import { Alert } from 'react-native';
 import { API_BASE } from '../../api';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { useLogStore } from '../stores/useLogStore';
+import { clearSession } from './session';
 
 let socket: Socket | null = null;
 
@@ -86,6 +88,21 @@ export function connectSocket(gameId: string, teamId: string): Socket {
 
   socket.on('game_ended', (data: { winnerId: string | null; isTie: boolean }) => {
     useGameStore.getState().updateStatus('ended');
+  });
+
+  socket.on('team_kicked', (data: { teamId: string }) => {
+    if (data.teamId === useTeamStore.getState().myTeamId) {
+      useGameStore.getState().clearGame();
+      useTeamStore.getState().clear();
+      useLocationStore.getState().clearLocations();
+      useLogStore.getState().clear();
+      clearSession();
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+      Alert.alert('Removed', 'You were removed from the game by the host');
+    }
   });
 
   socket.on('game_paused', () => {
