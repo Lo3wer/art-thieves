@@ -191,7 +191,7 @@ export default function ClaimScreen() {
     try {
       let photoId: string | undefined;
       if (photo) {
-        const uploaded = await uploadPhoto(game.id, landmark.id, photo);
+        const uploaded = await uploadPhoto(game.id, landmark.id, photo, ownLocation ?? undefined);
         photoId = uploaded.photoId;
       }
       await api.claimLandmark(game.id, landmark.id, ownLocation!.latitude, ownLocation!.longitude, photoId);
@@ -291,7 +291,7 @@ export default function ClaimScreen() {
     if (!lm || !game || !photo) return;
     setLoading(true);
     try {
-      const uploaded = await uploadPhoto(game.id, lm.id, photo);
+      const uploaded = await uploadPhoto(game.id, lm.id, photo, ownLocation ?? undefined);
       await handleChallenge('complete', uploaded.photoId);
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Photo upload failed');

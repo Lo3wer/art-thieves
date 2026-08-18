@@ -5,7 +5,8 @@ import { ApiError, NetworkError } from './errors';
 export async function uploadPhoto(
   gameId: string,
   landmarkId: string,
-  uri: string
+  uri: string,
+  coords?: { latitude: number; longitude: number }
 ): Promise<{ photoId: string; url: string }> {
   const teamId = useTeamStore.getState().myTeamId ?? '';
   const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
@@ -14,6 +15,10 @@ export async function uploadPhoto(
   form.append('photo', { uri, name: `photo.${ext}`, type } as any);
   form.append('teamId', teamId);
   form.append('landmarkId', landmarkId);
+  if (coords) {
+    form.append('latitude', String(coords.latitude));
+    form.append('longitude', String(coords.longitude));
+  }
 
   const url = `${API_BASE}/api/games/${gameId}/photos`;
   let res: Response;
