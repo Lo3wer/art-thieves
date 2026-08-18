@@ -13,6 +13,7 @@ import { scheduleLocalNotification, scheduleLocalNotificationDelayed, formatMinu
 import type { Landmark, LandmarkState, ChallengeSpec, ChallengeView } from '../types';
 import { Icon, ICONS } from '../components/icons';
 import type { IconSpec } from '../components/icons';
+import { Button } from '../components/Button';
 
 type ResultKind = 'claim' | 'steal' | 'complete' | 'fail' | 'pass';
 
@@ -48,6 +49,13 @@ export default function ClaimScreen() {
   const myTeamId = useTeamStore((s) => s.myTeamId);
   const myTeamColor = useTeamStore((s) => s.myTeamColor);
   const isFrozen = useTeamStore((s) => s.isFrozen);
+  const freezeEndsAt = useTeamStore((s) => s.freezeEndsAt);
+
+  const frozenReason = isFrozen
+    ? freezeEndsAt
+      ? `Your team is frozen — ${Math.max(1, Math.ceil((new Date(freezeEndsAt).getTime() - Date.now()) / 60000))} min left`
+      : 'Your team is frozen'
+    : undefined;
 
   const [activeTab, setActiveTab] = useState<'nearby' | 'owned'>('nearby');
   const [permission, requestPermission] = useCameraPermissions();
@@ -55,6 +63,7 @@ export default function ClaimScreen() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [phase, setPhase] = useState<ClaimPhase>('idle');
   const [loading, setLoading] = useState(false);
+  const [pendingOutcome, setPendingOutcome] = useState<'complete' | 'fail' | 'pass' | null>(null);
   const [showStealModal, setShowStealModal] = useState(false);
   const [result, setResult] = useState<ClaimResult | null>(null);
   const [exitInfo, setExitInfo] = useState<string | null>(null);
@@ -286,6 +295,7 @@ export default function ClaimScreen() {
   const handleChallenge = async (outcome: 'complete' | 'fail' | 'pass', photoId?: string) => {
     if (!lm || !game) return;
     setLoading(true);
+    setPendingOutcome(outcome);
     try {
       let response: { penaltyUntil?: string; penaltyType?: 'tracker' | 'transit' } | null = null;
       if (outcome === 'complete') {
@@ -321,6 +331,7 @@ export default function ClaimScreen() {
       reset();
     } finally {
       setLoading(false);
+      setPendingOutcome(null);
     }
   };
 
@@ -479,33 +490,34 @@ export default function ClaimScreen() {
               <Text style={styles.penaltyNote}>{spec.instant.penalty.note}</Text>
             )}
             <View style={styles.challengeButtons}>
-              <TouchableOpacity
-                style={[styles.challengeBtn, { backgroundColor: '#2ecc71' }]}
-                onPress={() => (needsPhoto ? startChallengeCamera() : handleChallenge('complete'))}
-                disabled={loading}
-              >
-                <Text style={styles.buttonText}>
-                  {needsPhoto
+              <Button
+                label={
+                  needsPhoto
                     ? 'Complete (with photo)'
-                    : spec.instant?.completeLabel ?? 'Complete'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.challengeBtn, { backgroundColor: '#e74c3c' }]}
+                    : spec.instant?.completeLabel ?? 'Complete'
+                }
+                onPress={() => (needsPhoto ? startChallengeCamera() : handleChallenge('complete'))}
+                variant="success"
+                loading={loading && pendingOutcome === 'complete'}
+                disabled={loading || isFrozen}
+                disabledReason={frozenReason}
+              />
+              <Button
+                label="Fail"
                 onPress={() => handleChallenge('fail')}
-                disabled={loading}
-              >
-                <Text style={styles.buttonText}>Fail</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.challengeBtn, { backgroundColor: '#f39c12' }]}
+                variant="danger"
+                loading={loading && pendingOutcome === 'fail'}
+                disabled={loading || isFrozen}
+                disabledReason={frozenReason}
+              />
+              <Button
+                label={spec.instant?.vetoLabel ?? 'Pass'}
                 onPress={() => handleChallenge('pass')}
-                disabled={loading}
-              >
-                <Text style={styles.buttonText}>
-                  {spec.instant?.vetoLabel ?? 'Pass'}
-                </Text>
-              </TouchableOpacity>
+                variant="warning"
+                loading={loading && pendingOutcome === 'pass'}
+                disabled={loading || isFrozen}
+                disabledReason={frozenReason}
+              />
               {spec.instant?.vetoNote && (
                 <Text style={styles.penaltyNote}>{spec.instant.vetoNote}</Text>
               )}
@@ -654,30 +666,29 @@ export default function ClaimScreen() {
           )}
 
           {state?.teamId === myTeamId && spec && !isAttempted ? (
-            <TouchableOpacity
-              style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+            <Button
+              label="View Challenge"
               onPress={() => setPhase('challenge')}
               disabled={isFrozen}
-            >
-              <Text style={styles.buttonText}>View Challenge</Text>
-            </TouchableOpacity>
+              disabledReason={frozenReason}
+              style={styles.primaryButtonWrap}
+            />
           ) : (
             <>
-              <TouchableOpacity
-                style={[styles.primaryButton, isFrozen && styles.buttonDisabled]}
+              <Button
+                label={isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
                 onPress={handleTakePhoto}
                 disabled={isFrozen}
-              >
-                <Text style={styles.buttonText}>
-                  {isFrozen ? 'Frozen - Cannot Claim' : isSteal ? 'Take Selfie to Steal' : 'Take Selfie to Claim'}
-                </Text>
-              </TouchableOpacity>
+                disabledReason={frozenReason}
+                style={styles.primaryButtonWrap}
+              />
               {!isFrozen && (
-                <TouchableOpacity style={styles.secondaryButton} onPress={handleConfirmClaim}>
-                  <Text style={styles.secondaryButtonText}>
-                    {isSteal ? 'Steal Without Photo' : 'Claim Without Photo'}
-                  </Text>
-                </TouchableOpacity>
+                <Button
+                  label={isSteal ? 'Steal Without Photo' : 'Claim Without Photo'}
+                  onPress={handleConfirmClaim}
+                  variant="secondary"
+                  style={styles.secondaryButtonWrap}
+                />
               )}
             </>
           )}
@@ -712,6 +723,8 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: '#1a1a2e', paddingVertical: 14,
     borderRadius: 10, alignItems: 'center', justifyContent: 'center',
   },
+  primaryButtonWrap: { marginTop: 16 },
+  secondaryButtonWrap: { marginTop: 8 },
   primaryButton: {
     backgroundColor: '#1a1a2e', paddingVertical: 14, paddingHorizontal: 32,
     borderRadius: 10, marginTop: 16,
@@ -735,7 +748,6 @@ const styles = StyleSheet.create({
   stealDesc: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 8, lineHeight: 22 },
   challengePrompt: { fontSize: 16, color: '#333', textAlign: 'center', marginVertical: 16, lineHeight: 24 },
   challengeButtons: { gap: 12, width: '100%', marginTop: 8 },
-  challengeBtn: { paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   pendingText: { fontSize: 15, color: '#555', textAlign: 'center', marginVertical: 16, lineHeight: 24 },
   penaltyNote: { fontSize: 12, color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 4, lineHeight: 18 },
   attemptedText: { fontSize: 14, color: '#888', fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
