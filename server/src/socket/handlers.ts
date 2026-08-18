@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { store } from '../data/store';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
-import { startChallengeForClaim, resolveChallengeForTeam } from '../game/challenges';
+import { startChallengeForClaim, resolveChallengeForTeam, hasActiveChallenge } from '../game/challenges';
 import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
 import { broadcastState, seedSnapshot, buildRoomState } from './broadcast';
 import { isTeamFrozen, getFrozenUntil } from '../game/freeze';
@@ -16,8 +16,9 @@ export function registerGameHandlers(io: Server): void {
     socket.on('join_game', ({ gameId, teamId }: { gameId: string; teamId: string }) => {
       currentGameId = gameId;
       currentTeamId = teamId;
+      socket.data.teamId = teamId;
       socket.join(`game:${gameId}`);
-      const state = buildRoomState(gameId);
+      const state = buildRoomState(gameId, teamId);
       if (state) {
         socket.emit('state_update', { game: state });
         seedSnapshot(gameId);
@@ -26,13 +27,32 @@ export function registerGameHandlers(io: Server): void {
 
     socket.on('location_update', ({ latitude, longitude }: { latitude: number; longitude: number }) => {
       if (!currentGameId || !currentTeamId) return;
-      store.addLocationPing(currentGameId, currentTeamId, latitude, longitude);
-      socket.to(`game:${currentGameId}`).emit('location_broadcast', {
-        teamId: currentTeamId,
+      const gameId = currentGameId;
+      const senderTeamId = currentTeamId;
+      store.addLocationPing(gameId, senderTeamId, latitude, longitude);
+      const room = `game:${gameId}`;
+      const payload = {
+        teamId: senderTeamId,
         latitude,
         longitude,
         timestamp: new Date().toISOString(),
-      });
+      };
+      // Teams with an in-progress challenge only receive their own team's locations
+      void (async () => {
+        const sockets = await gameNsp.in(room).fetchSockets();
+        for (const recipient of sockets) {
+          if (recipient.id === socket.id) continue;
+          const recipientTeamId = recipient.data?.teamId as string | undefined;
+          if (
+            recipientTeamId &&
+            recipientTeamId !== senderTeamId &&
+            hasActiveChallenge(gameId, recipientTeamId)
+          ) {
+            continue;
+          }
+          recipient.emit('location_broadcast', payload);
+        }
+      })();
     });
 
     socket.on('claim_landmark', ({ landmarkId, latitude, longitude }: { landmarkId: string; latitude: number; longitude: number }) => {

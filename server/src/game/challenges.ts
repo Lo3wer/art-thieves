@@ -42,6 +42,14 @@ export function buildChallengeView(
   return view;
 }
 
+export function hasActiveChallenge(gameId: string, teamId: string): boolean {
+  return store
+    .getChallengeSessionsByGame(gameId)
+    .some(
+      (a) => a.teamId === teamId && (a.status === 'pending' || a.status === 'ready')
+    );
+}
+
 export function decorateLandmarkStates(gameId: string): NominalLandmarkState[] {
   const specMap = new Map(
     store.getLandmarksByGame(gameId).map((l) => [l.id, l.challenge ?? null] as const)

@@ -1,6 +1,6 @@
 import type { Server } from 'socket.io';
 import { store } from '../data/store';
-import { decorateLandmarkStates } from '../game/challenges';
+import { decorateLandmarkStates, hasActiveChallenge } from '../game/challenges';
 import { getFrozenTeams } from '../game/freeze';
 
 let io: Server | null = null;
@@ -20,7 +20,7 @@ function cloneState(state: any): any {
   return JSON.parse(JSON.stringify(state));
 }
 
-export function buildRoomState(gameId: string): any {
+export function buildRoomState(gameId: string, viewerTeamId?: string): any {
   const game = store.getGame(gameId);
   if (!game) return null;
   return {
@@ -30,15 +30,20 @@ export function buildRoomState(gameId: string): any {
     landmarkStates: decorateLandmarkStates(gameId),
     penalties: store.getPenaltiesByGame(gameId),
     frozenTeams: getFrozenTeams(gameId),
-    locations: getLatestTeamLocations(gameId),
+    locations: getLatestTeamLocations(gameId, viewerTeamId),
   };
 }
 
-function getLatestTeamLocations(gameId: string): any[] {
+function getLatestTeamLocations(gameId: string, viewerTeamId?: string): any[] {
   const pings = store.getLocationPings(gameId);
   const latest = new Map<string, any>();
   for (const p of pings) latest.set(p.teamId, p);
-  return [...latest.values()];
+  let list = [...latest.values()];
+  // A team with an in-progress challenge cannot see rival locations (anti-scouting rule)
+  if (viewerTeamId && hasActiveChallenge(gameId, viewerTeamId)) {
+    list = list.filter((l) => l.teamId === viewerTeamId);
+  }
+  return list;
 }
 
 function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {
