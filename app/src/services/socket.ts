@@ -6,6 +6,7 @@ import { useLocationStore } from '../stores/useLocationStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { useLogStore } from '../stores/useLogStore';
 import { clearSession } from './session';
+import { notifyTagged, notifyGameEnded, syncHalfTimeNotification } from './gameNotifications';
 
 let socket: Socket | null = null;
 
@@ -51,6 +52,7 @@ export function connectSocket(gameId: string, teamId: string): Socket {
       if (data.diff.frozenTeams) applyFrozenTeams(data.diff.frozenTeams);
       useGameStore.getState().applyDiff(data.diff);
     }
+    void syncHalfTimeNotification();
   });
 
   socket.on('log_entry', (entry: any) => {
@@ -71,6 +73,7 @@ export function connectSocket(gameId: string, teamId: string): Socket {
         const disputeEnd = new Date(new Date(data.tagTimestamp).getTime() + (game.config.disputeWindow ?? 60) * 1000).toISOString();
         useTeamStore.getState().setDisputeWindow(disputeEnd);
       }
+      notifyTagged();
     }
   });
 
@@ -88,6 +91,8 @@ export function connectSocket(gameId: string, teamId: string): Socket {
 
   socket.on('game_ended', (data: { winnerId: string | null; isTie: boolean }) => {
     useGameStore.getState().updateStatus('ended');
+    notifyGameEnded(data);
+    void syncHalfTimeNotification();
   });
 
   socket.on('team_kicked', (data: { teamId: string }) => {
@@ -107,10 +112,12 @@ export function connectSocket(gameId: string, teamId: string): Socket {
 
   socket.on('game_paused', () => {
     useGameStore.getState().updateStatus('paused');
+    void syncHalfTimeNotification();
   });
 
   socket.on('game_resumed', () => {
     useGameStore.getState().updateStatus('active');
+    void syncHalfTimeNotification();
   });
 
   socket.on('error', (data: { message: string }) => {
