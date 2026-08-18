@@ -106,6 +106,13 @@ export const store = {
   // Landmark state
   getLandmarkStates: (gameId: string): LandmarkState[] =>
     getDb().select().from(s.landmarkStates).where(eq(s.landmarkStates.gameId, gameId)).all() as LandmarkState[],
+  clearLandmarkState: (gameId: string, landmarkId: string): boolean => {
+    const result = getDb()
+      .delete(s.landmarkStates)
+      .where(and(eq(s.landmarkStates.gameId, gameId), eq(s.landmarkStates.landmarkId, landmarkId)))
+      .run();
+    return result.changes > 0;
+  },
   upsertLandmarkState: (
     gameId: string,
     landmarkId: string,
@@ -157,6 +164,17 @@ export const store = {
       .from(s.challengeAttempts)
       .where(and(eq(s.challengeAttempts.gameId, gameId), eq(s.challengeAttempts.landmarkId, landmarkId)))
       .all() as ChallengeAttempt[],
+  deleteChallengeSession: (gameId: string, landmarkId: string, teamId: string): boolean => {
+    const result = getDb()
+      .delete(s.challengeAttempts)
+      .where(and(
+        eq(s.challengeAttempts.gameId, gameId),
+        eq(s.challengeAttempts.landmarkId, landmarkId),
+        eq(s.challengeAttempts.teamId, teamId)
+      ))
+      .run();
+    return result.changes > 0;
+  },
   startChallengeSession: (
     gameId: string,
     landmarkId: string,

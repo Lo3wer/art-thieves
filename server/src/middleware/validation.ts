@@ -94,6 +94,20 @@ export const pushTokenSchema = z.object({
   token: z.string().min(1),
 });
 
+export const debugLandmarkStateSchema = z.object({
+  teamId: z.string().uuid(),
+  landmarkId: z.string().uuid(),
+  holderTeamId: z.string().uuid().nullable(),
+  locked: z.boolean(),
+});
+
+export const debugChallengeAttemptSchema = z.object({
+  teamId: z.string().uuid(),
+  landmarkId: z.string().uuid(),
+  targetTeamId: z.string().uuid(),
+  action: z.enum(['clear-attempt', 'set-pending']),
+});
+
 export const configUpdateSchema = z.object({
   duration: z.number().positive().optional(),
   vicinityRadius: z.number().positive().optional(),

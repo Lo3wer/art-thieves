@@ -11,6 +11,8 @@ import {
   pushTokenSchema,
   configUpdateSchema,
   photoMetadataSchema,
+  debugLandmarkStateSchema,
+  debugChallengeAttemptSchema,
 } from '../middleware/validation';
 import { isWithinVicinity, computeScoreboard, computeWinner, checkWinCondition, getActiveElapsedMs } from '../game/logic';
 import { scheduleGameEnd, cancelGameEnd } from '../game/timer';
@@ -583,6 +585,71 @@ router.get('/games/:id/timeline', (req, res) => {
     })),
     events,
   });
+});
+
+// Host debug controls: repair landmark state when something goes wrong mid-game.
+function assertHost(game: NonNullable<ReturnType<typeof store.getGame>>, teamId: string): void {
+  if (!game.hostTeamId || teamId !== game.hostTeamId) {
+    throw new AppError(403, 'Only the host can use debug controls');
+  }
+}
+
+router.put('/games/:id/debug/landmark-state', validate(debugLandmarkStateSchema), (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const { teamId, landmarkId, holderTeamId, locked } = req.body;
+  assertHost(game, teamId);
+
+  const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  if (!landmark) throw new AppError(404, 'Landmark not found');
+
+  if (holderTeamId) {
+    const holder = store.getTeam(holderTeamId);
+    if (!holder || holder.gameId !== game.id) throw new AppError(404, 'Team not found');
+    store.upsertLandmarkState(game.id, landmarkId, holderTeamId, locked);
+  } else {
+    store.clearLandmarkState(game.id, landmarkId);
+  }
+
+  store.addLogEntry(game.id, 'debug_adjusted', {
+    kind: 'landmark-state',
+    landmarkId,
+    landmarkName: landmark.name,
+    holderTeamId,
+    locked,
+    hostTeamId: teamId,
+  });
+  broadcastState(game.id);
+  res.json({ ok: true, landmarkStates: decorateLandmarkStates(game.id) });
+});
+
+router.put('/games/:id/debug/challenge-attempt', validate(debugChallengeAttemptSchema), (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const { teamId, landmarkId, targetTeamId, action } = req.body;
+  assertHost(game, teamId);
+
+  const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  if (!landmark) throw new AppError(404, 'Landmark not found');
+  const target = store.getTeam(targetTeamId);
+  if (!target || target.gameId !== game.id) throw new AppError(404, 'Team not found');
+
+  store.deleteChallengeSession(game.id, landmarkId, targetTeamId);
+  if (action === 'set-pending') {
+    store.startChallengeSession(game.id, landmarkId, targetTeamId);
+  }
+
+  store.addLogEntry(game.id, 'debug_adjusted', {
+    kind: 'challenge-attempt',
+    action,
+    landmarkId,
+    landmarkName: landmark.name,
+    targetTeamId,
+    targetTeamName: target.name,
+    hostTeamId: teamId,
+  });
+  broadcastState(game.id);
+  res.json({ ok: true, challenge: store.getChallengeSession(game.id, landmarkId, targetTeamId) });
 });
 
 export default router;

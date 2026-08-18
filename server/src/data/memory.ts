@@ -97,6 +97,14 @@ export const store = {
 
   // Landmark state
   getLandmarkStates: (gameId: string) => landmarkStates.filter((s) => s.gameId === gameId),
+  clearLandmarkState: (gameId: string, landmarkId: string): boolean => {
+    const idx = landmarkStates.findIndex(
+      (s) => s.gameId === gameId && s.landmarkId === landmarkId
+    );
+    if (idx === -1) return false;
+    landmarkStates.splice(idx, 1);
+    return true;
+  },
   upsertLandmarkState: (
     gameId: string,
     landmarkId: string,
@@ -132,6 +140,14 @@ export const store = {
     challengeAttempts.filter((a) => a.gameId === gameId),
   getChallengeSessionsForLandmark: (gameId: string, landmarkId: string) =>
     challengeAttempts.filter((a) => a.gameId === gameId && a.landmarkId === landmarkId),
+  deleteChallengeSession: (gameId: string, landmarkId: string, teamId: string): boolean => {
+    const idx = challengeAttempts.findIndex(
+      (a) => a.gameId === gameId && a.landmarkId === landmarkId && a.teamId === teamId
+    );
+    if (idx === -1) return false;
+    challengeAttempts.splice(idx, 1);
+    return true;
+  },
   startChallengeSession: (
     gameId: string,
     landmarkId: string,
