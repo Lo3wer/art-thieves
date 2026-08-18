@@ -198,6 +198,20 @@ export default function MapScreen() {
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const centeredRef = useRef(false);
 
+  // Anti-scouting: while our challenge attempt is in progress we only see our own team
+  const myChallengeActive = useMemo(() => {
+    if (!game || !myTeamId) return false;
+    return game.landmarkStates.some(
+      (s) =>
+        s.teamId === myTeamId &&
+        (s.challenge?.status === 'pending' || s.challenge?.status === 'ready')
+    );
+  }, [game, myTeamId]);
+
+  const visibleTeamLocations = myChallengeActive
+    ? teamLocations.filter((l) => l.teamId === myTeamId)
+    : teamLocations;
+
   const centerOnOwnTeam = useCallback(() => {
     if (centeredRef.current) return;
     const ownTeamLoc = teamLocations.find((l) => l.teamId === myTeamId);
@@ -261,7 +275,7 @@ export default function MapScreen() {
     : null;
 
   const selectedTeamLoc = selectedTeamId
-    ? teamLocations.find((l) => l.teamId === selectedTeamId)
+    ? visibleTeamLocations.find((l) => l.teamId === selectedTeamId)
     : null;
   const selectedTeamInfo = selectedTeamId
     ? game.teams.find((t) => t.id === selectedTeamId)
@@ -274,6 +288,14 @@ export default function MapScreen() {
           <Icon spec={ICONS.eyeOff} size={18} />
           <Text style={styles.penaltyBannerText}>
             Blind spot active — your tracker is hidden for {Math.max(1, Math.round((new Date(myTrackerPenalty.until).getTime() - Date.now()) / 60000))} min
+          </Text>
+        </View>
+      )}
+      {myChallengeActive && (
+        <View style={styles.challengeBanner}>
+          <Icon spec={ICONS.eyeOff} size={18} />
+          <Text style={styles.penaltyBannerText}>
+            Rival locations hidden while your challenge is in progress
           </Text>
         </View>
       )}
@@ -325,7 +347,7 @@ export default function MapScreen() {
           );
         })}
 
-        {teamLocations.map((loc) => {
+        {visibleTeamLocations.map((loc) => {
           const selected = selectedTeamId === loc.teamId;
           if (myTrackerPenalty && loc.teamId === myTeamId) return null;
           return (
@@ -472,6 +494,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   penaltyBannerText: { color: '#fff', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  challengeBanner: {
+    position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
+    backgroundColor: '#e67e22', borderRadius: 12, padding: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
   nearbyText: { fontSize: 14, fontWeight: '600', color: '#2ecc71', marginTop: 8 },
   distantText: { fontSize: 13, color: '#e74c3c', marginTop: 8 },
   mockPanel: {
