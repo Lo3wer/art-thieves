@@ -529,6 +529,28 @@ router.get('/games/:id/timeline', (req, res) => {
       };
     });
 
+  const landmarks = store.getLandmarksByGame(game.id);
+  const stateByLandmark = new Map(states.map((s) => [s.landmarkId, s]));
+  const teamById = new Map(teams.map((t) => [t.id, t]));
+  const landmarkById = new Map(landmarks.map((l) => [l.id, l]));
+
+  const photos = store.getPhotosByGame(game.id).map((p) => {
+    const team = teamById.get(p.teamId);
+    const landmark = landmarkById.get(p.landmarkId);
+    return {
+      id: p.id,
+      url: p.url,
+      teamId: p.teamId,
+      teamName: team?.name ?? null,
+      teamColor: team?.color ?? null,
+      landmarkId: p.landmarkId,
+      landmarkName: landmark?.name ?? null,
+      latitude: p.latitude ?? landmark?.latitude ?? null,
+      longitude: p.longitude ?? landmark?.longitude ?? null,
+      takenAt: p.createdAt,
+    };
+  });
+
   res.json({
     game: {
       id: game.id,
@@ -538,6 +560,21 @@ router.get('/games/:id/timeline', (req, res) => {
     },
     scores,
     winner: { id: result.winnerId, isTie: result.isTie },
+    teams: teams.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    landmarks: landmarks.map((l) => {
+      const state = stateByLandmark.get(l.id);
+      return {
+        id: l.id,
+        name: l.name,
+        latitude: l.latitude,
+        longitude: l.longitude,
+        finalStatus: !state ? 'unclaimed' : state.locked ? 'locked' : 'claimed',
+        holderTeamId: state?.teamId ?? null,
+        locked: state?.locked ?? false,
+        claimedAt: state?.claimedAt ?? null,
+      };
+    }),
+    photos,
     locations: store.getLocationPings(game.id).map((l) => ({
       teamId: l.teamId,
       latitude: l.latitude,
