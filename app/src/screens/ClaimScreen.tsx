@@ -12,6 +12,14 @@ import { isWithinVicinity } from '../utils/distance';
 import { scheduleLocalNotification, scheduleLocalNotificationDelayed, formatMinutesUntil } from '../services/notifications';
 import type { Landmark, LandmarkState, ChallengeSpec, ChallengeView } from '../types';
 import { Icon, ICONS } from '../components/icons';
+import type { IconSpec } from '../components/icons';
+
+type ResultKind = 'claim' | 'steal' | 'complete' | 'fail' | 'pass';
+
+interface ClaimResult {
+  kind: ResultKind;
+  message: string;
+}
 
 type ClaimPhase = 'idle' | 'camera' | 'preview' | 'result' | 'challenge' | 'challengePhoto' | 'challengePhotoPreview';
 
@@ -47,7 +55,7 @@ export default function ClaimScreen() {
   const [phase, setPhase] = useState<ClaimPhase>('idle');
   const [loading, setLoading] = useState(false);
   const [showStealModal, setShowStealModal] = useState(false);
-  const [resultMessage, setResultMessage] = useState('');
+  const [result, setResult] = useState<ClaimResult | null>(null);
   const [exitInfo, setExitInfo] = useState<string | null>(null);
 
   const nearbyLandmark = useCallback((): Landmark | null => {
@@ -118,6 +126,7 @@ export default function ClaimScreen() {
     setPhoto(null);
     setPhase('idle');
     setShowStealModal(false);
+    setResult(null);
   };
 
   // Auto-exit the challenge screen when the claim context changes underneath us
@@ -187,6 +196,9 @@ export default function ClaimScreen() {
       setShowStealModal(true);
       return;
     }
+    const fromTeamName = isSteal
+      ? game.teams.find((t) => t.id === st.teamId)?.name ?? 'another team'
+      : null;
 
     setLoading(true);
     try {
@@ -209,13 +221,13 @@ export default function ClaimScreen() {
           'Landmark Stolen!',
           `You stole ${landmark.name} from another team!`
         );
-        setResultMessage(`Stole ${landmark.name}!`);
+        setResult({ kind: 'steal', message: `You stole ${landmark.name} from ${fromTeamName}!` });
       } else {
         scheduleLocalNotification(
           'Landmark Claimed!',
           `You claimed ${landmark.name}!`
         );
-        setResultMessage(`Claimed ${landmark.name}!`);
+        setResult({ kind: 'claim', message: `${landmark.name} is now claimed by your team.` });
       }
 
       if (spec) {
@@ -271,13 +283,19 @@ export default function ClaimScreen() {
           applyPenaltyReminders(lm.name, { ...spec.instant.penalty, type: response.penaltyType });
           message = `${message}\n\n${spec.instant.penalty.note}`;
         }
-        setResultMessage(message);
+        setResult({ kind: 'complete', message });
       } else if (outcome === 'fail') {
         await api.failChallenge(game.id, lm.id);
-        setResultMessage(`Challenge failed for ${lm.name}`);
+        setResult({
+          kind: 'fail',
+          message: `Challenge failed for ${lm.name}. It stays claimed by you, but rivals can steal it.`,
+        });
       } else {
         await api.passChallenge(game.id, lm.id);
-        setResultMessage(`Challenge passed for ${lm.name}`);
+        setResult({
+          kind: 'pass',
+          message: `Challenge passed for ${lm.name}. It stays claimed by you, but rivals can steal it.`,
+        });
       }
       setPhase('result');
     } catch (e: any) {
@@ -484,13 +502,21 @@ export default function ClaimScreen() {
   }
 
   if (phase === 'result') {
+    const RESULT_VIEW: Record<ResultKind, { icon: IconSpec; title: string }> = {
+      claim: { icon: ICONS.camera, title: 'Claimed!' },
+      steal: { icon: ICONS.swords, title: 'Stolen!' },
+      complete: { icon: ICONS.checkCircle, title: 'Challenge Complete — Locked!' },
+      fail: { icon: ICONS.cancel, title: 'Challenge Failed' },
+      pass: { icon: ICONS.fastForward, title: 'Challenge Passed' },
+    };
+    const view = result ? RESULT_VIEW[result.kind] : RESULT_VIEW.claim;
     return (
       <View style={styles.centered}>
         <View style={styles.resultIcon}>
-          <Icon spec={ICONS.checkCircle} size={48} />
+          <Icon spec={view.icon} size={48} />
         </View>
-        <Text style={styles.sectionTitle}>Success!</Text>
-        <Text style={styles.resultSub}>{resultMessage}</Text>
+        <Text style={styles.sectionTitle}>{view.title}</Text>
+        <Text style={styles.resultSub}>{result?.message}</Text>
         <TouchableOpacity style={styles.primaryButton} onPress={reset}>
           <Text style={styles.buttonText}>Done</Text>
         </TouchableOpacity>
