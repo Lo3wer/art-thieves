@@ -125,6 +125,8 @@ export interface Photo {
   landmarkId: string;
   filename: string;
   url: string;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
 }
 

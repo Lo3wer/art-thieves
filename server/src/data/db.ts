@@ -45,5 +45,12 @@ export function getDb(): BetterSQLite3Database<typeof schema> {
   return initDb();
 }
 
+export function closeDb(): void {
+  if (!dbInstance) return;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  (dbInstance as any).$client?.close?.();
+  dbInstance = null;
+}
+
 export type Db = BetterSQLite3Database<typeof schema>;
 export type { BetterSQLite3Database };

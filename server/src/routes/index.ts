@@ -473,11 +473,19 @@ router.post(
     const game = store.getGame(p(req.params.id));
     if (!game) throw new AppError(404, 'Game not found');
     if (!req.file) throw new AppError(400, 'No file uploaded');
-    const { teamId, landmarkId } = req.body;
+    const { teamId, landmarkId, latitude, longitude } = req.body;
     const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
     if (!landmark) throw new AppError(404, 'Landmark not found');
     const url = `/uploads/${game.id}/${req.file.filename}`;
-    const photo = store.addPhoto({ gameId: game.id, teamId, landmarkId, filename: req.file.filename, url });
+    const photo = store.addPhoto({
+      gameId: game.id,
+      teamId,
+      landmarkId,
+      filename: req.file.filename,
+      url,
+      ...(latitude !== undefined ? { latitude } : {}),
+      ...(longitude !== undefined ? { longitude } : {}),
+    });
     res.status(201).json({ photoId: photo.id, url });
   }
 );

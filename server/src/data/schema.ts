@@ -128,5 +128,7 @@ export const photos = sqliteTable('photos', {
   landmarkId: text('landmark_id').notNull(),
   filename: text('filename').notNull(),
   url: text('url').notNull(),
+  latitude: real('latitude'),
+  longitude: real('longitude'),
   createdAt: text('created_at').notNull(),
 });

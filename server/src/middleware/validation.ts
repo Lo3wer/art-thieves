@@ -42,6 +42,9 @@ export const claimSchema = z.object({
 export const photoMetadataSchema = z.object({
   teamId: z.string().uuid(),
   landmarkId: z.string().uuid(),
+  // multipart text fields arrive as strings; coerce to numbers
+  latitude: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
 });
 
 export const challengeSpecSchema = z.object({
