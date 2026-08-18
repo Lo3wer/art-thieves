@@ -11,7 +11,6 @@ import { useTeamStore } from '../stores/useTeamStore';
 import { isWithinVicinity } from '../utils/distance';
 import { scheduleLocalNotification, scheduleLocalNotificationDelayed, formatMinutesUntil } from '../services/notifications';
 import type { Landmark, LandmarkState, ChallengeSpec, ChallengeView } from '../types';
-import FrozenBar from '../components/FrozenBar';
 
 type ClaimPhase = 'idle' | 'camera' | 'preview' | 'result' | 'challenge' | 'challengePhoto' | 'challengePhotoPreview';
 
@@ -496,7 +495,6 @@ export default function ClaimScreen() {
 
   return (
     <View style={styles.container}>
-      <FrozenBar />
 
       <View style={styles.tabBar}>
         <TouchableOpacity

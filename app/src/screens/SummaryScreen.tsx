@@ -5,8 +5,11 @@ import {
 } from 'react-native';
 import { api } from '../services/api';
 import { disconnectSocket } from '../services/socket';
+import { clearSession } from '../services/session';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
+import { useLocationStore } from '../stores/useLocationStore';
+import { useLogStore } from '../stores/useLogStore';
 import type { GameSummary } from '../types';
 
 type SummaryView = 'landmarks' | 'teams';
@@ -51,8 +54,11 @@ export default function SummaryScreen() {
 
   const handleReturnToLobby = () => {
     disconnectSocket();
+    clearSession();
     clearTeam();
     clearGame();
+    useLocationStore.getState().clearLocations();
+    useLogStore.getState().clear();
   };
 
   if (!game) return null;

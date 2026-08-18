@@ -9,7 +9,6 @@ import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { getActiveElapsedMs } from '../utils/gameTime';
 import { useFrozenTeams } from '../hooks/useFrozenTeams';
-import FrozenBar from '../components/FrozenBar';
 
 interface ScoreEntry {
   team: { id: string; name: string; color: string };
@@ -27,6 +26,7 @@ export default function GameScreen() {
   const game = useGameStore((s) => s.game);
   const updateStatus = useGameStore((s) => s.updateStatus);
   const isHost = useTeamStore((s) => s.isHost);
+  const myTeamId = useTeamStore((s) => s.myTeamId);
   const frozenTeams = useTeamStore((s) => s.frozenTeams);
   const { now } = useFrozenTeams();
   const [timeLeft, setTimeLeft] = useState(0);
@@ -95,6 +95,23 @@ export default function GameScreen() {
     ]);
   };
 
+  const handleKick = (targetTeamId: string) => {
+    if (!game) return;
+    Alert.alert('Kick Team', 'Remove this team from the game?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Kick', style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.kickTeam(game.id, targetTeamId, myTeamId ?? '');
+          } catch (e: any) {
+            Alert.alert('Error', e.message ?? 'Failed to kick team');
+          }
+        },
+      },
+    ]);
+  };
+
   if (!game) return null;
 
   const scoreboard: ScoreEntry[] = game.teams.map((t) => {
@@ -139,8 +156,6 @@ export default function GameScreen() {
         </View>
       )}
 
-      <FrozenBar />
-
       <FlatList
         data={sorted}
         keyExtractor={(item) => item.team.id}
@@ -164,6 +179,11 @@ export default function GameScreen() {
                   <MaterialIcons name="ac-unit" size={14} color="#fff" />
                   <Text style={styles.frozenBadgeText}>FROZEN {formatTime(frozenRemaining)}</Text>
                 </View>
+              )}
+              {isHost && item.team.id !== myTeamId && (
+                <TouchableOpacity style={styles.kickButton} onPress={() => handleKick(item.team.id)}>
+                  <Text style={styles.kickButtonText}>Kick</Text>
+                </TouchableOpacity>
               )}
             </View>
           );
@@ -214,8 +234,6 @@ const styles = StyleSheet.create({
   clockLabel: { fontSize: 14, color: '#aaa', marginTop: 4 },
   pausedBanner: { backgroundColor: '#f39c12', padding: 12, borderRadius: 8, alignItems: 'center', marginBottom: 16 },
   pausedText: { color: '#fff', fontSize: 18, fontWeight: 'bold', letterSpacing: 2 },
-  frozenBanner: { backgroundColor: '#3498db', padding: 8, borderRadius: 8, alignItems: 'center', marginBottom: 12 },
-  frozenText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   pendingBadge: { backgroundColor: '#f39c12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   pendingText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   list: { flex: 1 },
@@ -233,6 +251,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginLeft: 8, gap: 4,
   },
   frozenBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  kickButton: {
+    backgroundColor: '#e74c3c', paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: 6, marginLeft: 8,
+  },
+  kickButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   hostControls: { flexDirection: 'row', gap: 12, marginTop: 16 },
   pauseButton: { flex: 1, backgroundColor: '#f39c12', padding: 14, borderRadius: 10, alignItems: 'center' },
   resumeButton: { flex: 1, backgroundColor: '#2ecc71', padding: 14, borderRadius: 10, alignItems: 'center' },
