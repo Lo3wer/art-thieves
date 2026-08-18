@@ -10,6 +10,7 @@ import { getActiveElapsedMs } from '../utils/gameTime';
 import { useFrozenTeams } from '../hooks/useFrozenTeams';
 import { scheduleLocalNotification } from '../services/notifications';
 import FrozenBar from '../components/FrozenBar';
+import { Icon, ICONS } from '../components/icons';
 
 export default function TagScreen() {
   const game = useGameStore((s) => s.game);
@@ -148,7 +149,9 @@ export default function TagScreen() {
       <Modal visible={showTagModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalIcon}>🏷️</Text>
+            <View style={styles.modalIcon}>
+              <Icon spec={ICONS.label} size={48} />
+            </View>
             <Text style={styles.modalTitle}>Tag {pendingTargetName}?</Text>
             <Text style={styles.modalDesc}>
               This will freeze {pendingTargetName} for 10 minutes and mark them as tagged.
@@ -202,7 +205,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 16, padding: 24, marginHorizontal: 32,
     alignItems: 'center', elevation: 10,
   },
-  modalIcon: { fontSize: 40, marginBottom: 12 },
+  modalIcon: { marginBottom: 12 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
   modalDesc: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
   modalButtons: { flexDirection: 'row', gap: 12 },

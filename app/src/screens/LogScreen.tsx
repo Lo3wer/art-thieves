@@ -6,24 +6,8 @@ import {
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useLogStore } from '../stores/useLogStore';
+import { Icon, LOG_EVENT_ICONS, LOG_EVENT_ICON_DEFAULT, ICONS } from '../components/icons';
 import type { LogEntry } from '../types';
-
-const EVENT_ICONS: Record<string, string> = {
-  game_created: '🎮',
-  team_joined: '👋',
-  game_started: '▶️',
-  game_paused: '⏸️',
-  game_resumed: '▶️',
-  game_ended: '⏹️',
-  landmark_claimed: '📸',
-  landmark_stolen: '⚔️',
-  challenge_complete: '🔒',
-  challenge_fail: '❌',
-  challenge_pass: '➡️',
-  challenge_voided: '💥',
-  tag_created: '🏷️',
-  tag_disputed: '🔄',
-};
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -134,7 +118,9 @@ export default function LogScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.logItem}>
-            <Text style={styles.logIcon}>{EVENT_ICONS[item.type] ?? '📄'}</Text>
+            <View style={styles.logIcon}>
+              <Icon spec={LOG_EVENT_ICONS[item.type] ?? LOG_EVENT_ICON_DEFAULT} size={20} />
+            </View>
             <View style={styles.logContent}>
               <Text style={styles.logText}>{getEventText(item)}</Text>
               <Text style={styles.logTime}>{formatTime(item.timestamp)}</Text>
@@ -144,7 +130,7 @@ export default function LogScreen() {
         contentContainerStyle={log.length === 0 ? styles.emptyContainer : undefined}
         ListEmptyComponent={
           <View style={styles.emptyView}>
-            <Text style={styles.emptyIcon}>📋</Text>
+            <Icon spec={ICONS.clipboard} size={48} />
             <Text style={styles.emptyText}>No events yet</Text>
           </View>
         }
@@ -168,12 +154,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', backgroundColor: '#fff', padding: 14,
     borderRadius: 10, marginBottom: 6, elevation: 1,
   },
-  logIcon: { fontSize: 20, marginRight: 12, marginTop: 2 },
+  logIcon: { marginRight: 12, marginTop: 2, width: 24, alignItems: 'center' },
   logContent: { flex: 1 },
   logText: { fontSize: 14, color: '#1a1a2e' },
   logTime: { fontSize: 11, color: '#aaa', marginTop: 4 },
   emptyContainer: { flex: 1 },
-  emptyView: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyView: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   emptyText: { fontSize: 16, color: '#888' },
 });

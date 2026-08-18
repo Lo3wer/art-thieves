@@ -19,6 +19,7 @@ import {
   jumpTo,
 } from '../services/mockLocation';
 import type { Landmark, LandmarkState, LocationPing, GameMap } from '../types';
+import { Icon, ICONS } from '../components/icons';
 
 const MINIMAL_MAP_STYLE: any = {
   version: 8,
@@ -252,8 +253,9 @@ export default function MapScreen() {
     <View style={styles.container}>
       {myTrackerPenalty && (
         <View style={styles.penaltyBanner}>
+          <Icon spec={ICONS.eyeOff} size={18} />
           <Text style={styles.penaltyBannerText}>
-            👁️ Blind spot active — your tracker is hidden for {Math.max(1, Math.round((new Date(myTrackerPenalty.until).getTime() - Date.now()) / 60000))} min
+            Blind spot active — your tracker is hidden for {Math.max(1, Math.round((new Date(myTrackerPenalty.until).getTime() - Date.now()) / 60000))} min
           </Text>
         </View>
       )}
@@ -336,8 +338,8 @@ export default function MapScreen() {
               <View style={[styles.teamDetailDot, { backgroundColor: selectedTeamInfo.color }]} />
               <Text style={styles.detailTitle}>{selectedTeamInfo.name}</Text>
             </View>
-            <TouchableOpacity onPress={closePanel}>
-              <Text style={styles.closeBtn}>✕</Text>
+            <TouchableOpacity onPress={closePanel} style={styles.closeBtn}>
+              <Icon spec={ICONS.close} size={22} />
             </TouchableOpacity>
           </View>
           <Text style={styles.statusText}>Location updated {timeSince(selectedTeamLoc.timestamp)}</Text>
@@ -348,8 +350,8 @@ export default function MapScreen() {
         <View style={styles.detailPanel}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>{selectedLandmark.name}</Text>
-            <TouchableOpacity onPress={closePanel}>
-              <Text style={styles.closeBtn}>✕</Text>
+            <TouchableOpacity onPress={closePanel} style={styles.closeBtn}>
+              <Icon spec={ICONS.close} size={22} />
             </TouchableOpacity>
           </View>
           {landmarkState && (
@@ -425,12 +427,13 @@ const styles = StyleSheet.create({
   detailHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   teamDetailDot: { width: 14, height: 14, borderRadius: 7 },
   detailTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e', flex: 1 },
-  closeBtn: { fontSize: 20, color: '#999', paddingLeft: 12 },
+  closeBtn: { paddingLeft: 12, paddingVertical: 4 },
   statusText: { fontSize: 14, color: '#666', marginTop: 4 },
   challengeText: { fontSize: 13, color: '#888', marginTop: 6, fontStyle: 'italic' },
   penaltyBanner: {
     position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
     backgroundColor: '#1a1a2e', borderRadius: 12, padding: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   penaltyBannerText: { color: '#fff', fontSize: 13, fontWeight: '600', textAlign: 'center' },
   nearbyText: { fontSize: 14, fontWeight: '600', color: '#2ecc71', marginTop: 8 },
