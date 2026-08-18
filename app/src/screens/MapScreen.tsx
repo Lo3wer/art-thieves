@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
 } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker as MapMarker } from '@maplibre/maplibre-react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
@@ -20,6 +20,7 @@ import {
 } from '../services/mockLocation';
 import type { Landmark, LandmarkState, LocationPing, GameMap } from '../types';
 import { Icon, ICONS } from '../components/icons';
+import { useNavigation } from '@react-navigation/native';
 
 const MINIMAL_MAP_STYLE: any = {
   version: 8,
@@ -63,7 +64,8 @@ const DEFAULT_BOUNDARY: [number, number][] = [
 const DEFAULT_CENTER: [number, number] = [-123.1207, 49.2827];
 const DEFAULT_ZOOM = 14;
 
-export default function MapScreen() {
+export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) {
+  const navigation = useNavigation<any>();
   const game = useGameStore((s) => s.game);
   const myAttempts = useGameStore((s) => s.myAttempts);
   const ownLocation = useLocationStore((s) => s.ownLocation);
@@ -283,7 +285,19 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      {myTrackerPenalty && (
+      {readOnly && (
+        <View style={styles.finalMapBar}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.navigate('Summary')}
+          >
+            <MaterialIcons name="arrow-back" size={22} color="#1a1a2e" />
+          </TouchableOpacity>
+          <Text style={styles.finalMapTitle}>Final Map</Text>
+          <View style={styles.backBtn} />
+        </View>
+      )}
+      {!readOnly && myTrackerPenalty && (
         <View style={styles.penaltyBanner}>
           <Icon spec={ICONS.eyeOff} size={18} />
           <Text style={styles.penaltyBannerText}>
@@ -291,7 +305,7 @@ export default function MapScreen() {
           </Text>
         </View>
       )}
-      {myChallengeActive && (
+      {myChallengeActive && !readOnly && (
         <View style={styles.challengeBanner}>
           <Icon spec={ICONS.eyeOff} size={18} />
           <Text style={styles.penaltyBannerText}>
@@ -424,10 +438,10 @@ export default function MapScreen() {
               Challenge: {selectedLandmark.challenge?.text ?? selectedLandmark.challengeText}
             </Text>
           )}
-          {isNearby && !isClaimedByMe && landmarkState?.status !== 'locked' && (
+          {!readOnly && isNearby && !isClaimedByMe && landmarkState?.status !== 'locked' && (
             <Text style={styles.nearbyText}>You are within vicinity!</Text>
           )}
-          {!isNearby && ownLocation && (
+          {!readOnly && !isNearby && ownLocation && (
             <Text style={styles.distantText}>Move closer to interact</Text>
           )}
         </View>
@@ -465,6 +479,12 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  finalMapBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingTop: 48, paddingBottom: 8, backgroundColor: '#f5f5f5',
+  },
+  backBtn: { padding: 8 },
+  finalMapTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e' },
   map: { flex: 1 },
   markerHalo: {
     backgroundColor: '#ffffff',

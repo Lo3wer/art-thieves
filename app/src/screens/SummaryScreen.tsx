@@ -3,6 +3,8 @@ import {
   View, Text, TouchableOpacity, FlatList,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { api } from '../services/api';
 import { disconnectSocket } from '../services/socket';
 import { clearSession } from '../services/session';
@@ -27,6 +29,7 @@ const CHALLENGE_LABEL: Record<'complete' | 'fail' | 'pass', string> = {
 };
 
 export default function SummaryScreen() {
+  const navigation = useNavigation<any>();
   const game = useGameStore((s) => s.game);
   const [summary, setSummary] = useState<GameSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,9 +200,18 @@ export default function SummaryScreen() {
         />
       )}
 
-      <TouchableOpacity style={styles.returnButton} onPress={handleReturnToLobby}>
-        <Text style={styles.returnButtonText}>Return to Lobby</Text>
-      </TouchableOpacity>
+      <View style={styles.footerButtons}>
+        <TouchableOpacity
+          style={styles.mapButton}
+          onPress={() => navigation.navigate('FinalMap' as never)}
+        >
+          <MaterialIcons name="map" size={18} color="#1a1a2e" />
+          <Text style={styles.mapButtonText}>View Final Map</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.returnButton} onPress={handleReturnToLobby}>
+          <Text style={styles.returnButtonText}>Return to Lobby</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -244,9 +256,16 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e' },
   statLabel: { fontSize: 11, color: '#888', marginTop: 2 },
   emptyText: { fontSize: 14, color: '#888', textAlign: 'center', marginTop: 24 },
+  footerButtons: { gap: 8, marginTop: 8 },
+  mapButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#fff', paddingVertical: 14, borderRadius: 12,
+    borderWidth: 1, borderColor: '#c8c8c8',
+  },
+  mapButtonText: { color: '#1a1a2e', fontSize: 16, fontWeight: '600' },
   returnButton: {
     backgroundColor: '#1a1a2e', paddingVertical: 16, borderRadius: 12,
-    alignItems: 'center', marginTop: 8,
+    alignItems: 'center', marginTop: 0,
   },
   returnButtonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
 });

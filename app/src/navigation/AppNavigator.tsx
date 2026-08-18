@@ -46,11 +46,19 @@ export default function AppNavigator() {
         })}
       >
         {isEnded ? (
-          <Tab.Screen
-            name="Summary"
-            component={SummaryScreen}
-            options={{ tabBarStyle: { display: 'none' } }}
-          />
+          <>
+            <Tab.Screen
+              name="Summary"
+              component={SummaryScreen}
+              options={{ tabBarStyle: { display: 'none' } }}
+            />
+            <Tab.Screen
+              name="FinalMap"
+              options={{ tabBarStyle: { display: 'none' } }}
+            >
+              {() => <MapScreen readOnly />}
+            </Tab.Screen>
+          </>
         ) : hasActiveGame ? (
           <>
             <Tab.Screen name="Game" component={GameScreen} />
