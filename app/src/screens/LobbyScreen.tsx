@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { api, ApiError, describeError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
+import { saveSession, clearSession } from '../services/session';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { useLobbyStore } from '../stores/useLobbyStore';
@@ -34,7 +35,7 @@ export default function LobbyScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [teamName, setTeamName] = useState('');
   const [teamColor, setTeamColor] = useState(TEAM_COLORS[0]);
-  const [roster, setRoster] = useState<{ name: string; color: string }[]>([]);
+  const [roster, setRoster] = useState<{ id: string; name: string; color: string }[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [existingJoinTeams, setExistingJoinTeams] = useState<{ name: string; color: string }[]>([]);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,7 +104,8 @@ export default function LobbyScreen() {
       setMyTeam(team.team.id, team.team.name, team.team.color);
       setHost(true);
       setGameCode(game.joinCode);
-      setRoster([{ name: team.team.name, color: team.team.color }]);
+      setRoster([{ id: team.team.id, name: team.team.name, color: team.team.color }]);
+      saveSession({ gameId: game.id, teamId: team.team.id });
       connectSocket(game.id, team.team.id);
       setView('waiting');
     } catch (e: any) {
@@ -129,9 +131,10 @@ export default function LobbyScreen() {
       setGameCode(game.joinCode);
       const existingTeams = game.teams.filter((t: any) => t.id !== team.id);
       setRoster([
-        ...existingTeams.map((t: any) => ({ name: t.name, color: t.color })),
-        { name: team.name, color: team.color },
+        ...existingTeams.map((t: any) => ({ id: t.id, name: t.name, color: t.color })),
+        { id: team.id, name: team.name, color: team.color },
       ]);
+      saveSession({ gameId: game.id, teamId: team.id });
       connectSocket(game.id, team.id);
       setView('waiting');
     } catch (e: any) {
@@ -167,6 +170,7 @@ export default function LobbyScreen() {
 
   const handleLeaveGame = () => {
     disconnectSocket();
+    clearSession();
     clearTeam();
     clearGame();
     setView('home');
@@ -181,7 +185,7 @@ export default function LobbyScreen() {
       const updated = await api.getGame(game.id);
       setGame(updated);
       setRoster(
-        updated.teams.map((t: any) => ({ name: t.name, color: t.color }))
+        updated.teams.map((t: any) => ({ id: t.id, name: t.name, color: t.color }))
       );
     } catch {}
   }, [setGame]);
@@ -192,6 +196,36 @@ export default function LobbyScreen() {
       return () => clearInterval(interval);
     }
   }, [view, pollGame]);
+
+  const handleKick = (targetTeamId: string) => {
+    const game = useGameStore.getState().game;
+    const myId = useTeamStore.getState().myTeamId;
+    if (!game || !myId) return;
+    Alert.alert('Kick Team', 'Remove this team from the game?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Kick', style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.kickTeam(game.id, targetTeamId, myId);
+            setRoster((r) => r.filter((t) => t.id !== targetTeamId));
+          } catch (e: any) {
+            Alert.alert('Error', e.message ?? 'Failed to kick team');
+          }
+        },
+      },
+    ]);
+  };
+
+  useEffect(() => {
+    const g = useGameStore.getState().game;
+    const t = useTeamStore.getState();
+    if (g && g.status === 'lobby' && t.myTeamId) {
+      setGameCode(g.joinCode);
+      setView('waiting');
+      setRoster(g.teams.map((team: any) => ({ id: team.id, name: team.name, color: team.color })));
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -205,6 +239,7 @@ export default function LobbyScreen() {
   if (view === 'waiting') {
     const game = useGameStore.getState().game;
     const isHost = useTeamStore.getState().isHost;
+    const myTeamId = useTeamStore.getState().myTeamId;
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Game Lobby</Text>
@@ -217,11 +252,16 @@ export default function LobbyScreen() {
         <Text style={styles.sectionTitle}>Teams ({roster.length})</Text>
         <FlatList
           data={roster}
-          keyExtractor={(_, i) => String(i)}
+          keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View style={styles.rosterItem}>
               <View style={[styles.colorDot, { backgroundColor: item.color }]} />
               <Text style={styles.rosterName}>{item.name}</Text>
+              {isHost && item.id !== myTeamId && (
+                <TouchableOpacity style={styles.kickButton} onPress={() => handleKick(item.id)}>
+                  <Text style={styles.kickButtonText}>Kick</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           style={styles.rosterList}
@@ -519,6 +559,11 @@ const styles = StyleSheet.create({
   rosterList: { flex: 1, marginTop: 8 },
   rosterItem: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#fff', borderRadius: 8, marginBottom: 6 },
   colorDot: { width: 16, height: 16, borderRadius: 8, marginRight: 12 },
-  rosterName: { fontSize: 16, color: '#333' },
+  rosterName: { fontSize: 16, color: '#333', flex: 1 },
+  kickButton: {
+    backgroundColor: '#e74c3c', paddingVertical: 6, paddingHorizontal: 14,
+    borderRadius: 6,
+  },
+  kickButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   waitingText: { fontSize: 16, color: '#666', textAlign: 'center', marginTop: 24 },
 });
