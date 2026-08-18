@@ -165,6 +165,22 @@ export const api = USE_MOCKS
         request<{ teamId: string; attempts: { landmarkId: string; status: string; outcome: string | null; startedAt: string; completedAt: string | null }[] }>(
           `/api/games/${gameId}/challenge-attempts?teamId=${teamId}`
         ),
+      debugLandmarkState: (
+        gameId: string,
+        body: { teamId: string; landmarkId: string; holderTeamId: string | null; locked: boolean }
+      ) =>
+        request<{ ok: boolean }>(`/api/games/${gameId}/debug/landmark-state`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
+      debugChallengeAttempt: (
+        gameId: string,
+        body: { teamId: string; landmarkId: string; targetTeamId: string; action: 'clear-attempt' | 'set-pending' }
+      ) =>
+        request<{ ok: boolean }>(`/api/games/${gameId}/debug/challenge-attempt`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
       getTimeline: (gameId: string) =>
         request<GameTimeline>(`/api/games/${gameId}/timeline`),
     };

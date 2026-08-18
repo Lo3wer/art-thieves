@@ -9,6 +9,7 @@ import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
 import { getActiveElapsedMs } from '../utils/gameTime';
 import { useFrozenTeams } from '../hooks/useFrozenTeams';
+import DebugMenu from '../components/DebugMenu';
 
 interface ScoreEntry {
   team: { id: string; name: string; color: string };
@@ -31,6 +32,7 @@ export default function GameScreen() {
   const { now } = useFrozenTeams();
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (!game || !game.startedAt) return;
@@ -206,8 +208,18 @@ export default function GameScreen() {
           <TouchableOpacity style={styles.endButton} onPress={handleEnd} disabled={loading}>
             <Text style={styles.buttonText}>{loading ? '...' : 'End Game'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => setShowDebug(true)}
+            disabled={loading}
+          >
+            <MaterialIcons name="build" size={16} color="#666" />
+            <Text style={styles.debugButtonText}>Debug</Text>
+          </TouchableOpacity>
         </View>
       )}
+
+      <DebugMenu visible={showDebug} onClose={() => setShowDebug(false)} />
     </View>
   );
 }
@@ -256,9 +268,15 @@ const styles = StyleSheet.create({
     borderRadius: 6, marginLeft: 8,
   },
   kickButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  hostControls: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  hostControls: { flexDirection: 'row', gap: 12, marginTop: 16, alignItems: 'center' },
   pauseButton: { flex: 1, backgroundColor: '#f39c12', padding: 14, borderRadius: 10, alignItems: 'center' },
   resumeButton: { flex: 1, backgroundColor: '#2ecc71', padding: 14, borderRadius: 10, alignItems: 'center' },
   endButton: { flex: 1, backgroundColor: '#e74c3c', padding: 14, borderRadius: 10, alignItems: 'center' },
+  debugButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: '#c8c8c8',
+  },
+  debugButtonText: { color: '#666', fontSize: 14, fontWeight: '600' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
