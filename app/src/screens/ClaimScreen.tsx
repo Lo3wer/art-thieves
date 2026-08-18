@@ -42,6 +42,7 @@ function challengeStateLabel(view: ChallengeView | undefined): string | null {
 
 export default function ClaimScreen() {
   const game = useGameStore((s) => s.game);
+  const myAttempts = useGameStore((s) => s.myAttempts);
   const updateLandmarkState = useGameStore((s) => s.updateLandmarkState);
   const ownLocation = useLocationStore((s) => s.ownLocation);
   const myTeamId = useTeamStore((s) => s.myTeamId);
@@ -128,6 +129,23 @@ export default function ClaimScreen() {
     setShowStealModal(false);
     setResult(null);
   };
+
+  useEffect(() => {
+    if (!game?.id || !myTeamId) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.getChallengeAttempts(game.id, myTeamId);
+        if (!active) return;
+        const map: Record<string, { status: string; outcome: string | null }> = {};
+        for (const a of res.attempts) map[a.landmarkId] = { status: a.status, outcome: a.outcome };
+        useGameStore.getState().setMyAttempts(map);
+      } catch {}
+    })();
+    return () => {
+      active = false;
+    };
+  }, [game?.id, myTeamId]);
 
   // Auto-exit the challenge screen when the claim context changes underneath us
   // (stolen, locked by another team, or walked away) to avoid a deadlock.
@@ -332,6 +350,9 @@ export default function ClaimScreen() {
 
   const isSteal = state?.status === 'claimed' && state?.teamId !== myTeamId;
   const owner = isSteal && lm && game ? game.teams.find((t) => t.id === state?.teamId) : null;
+  const myAttempt = lm ? myAttempts[lm.id] : undefined;
+  const myAttemptResolved =
+    myAttempt && (myAttempt.status === 'fail' || myAttempt.status === 'pass');
   const challengeView = state?.challenge;
   const isAttempted = challengeView?.outcome != null;
   const isVoided = challengeView?.status === 'voided';
@@ -626,6 +647,11 @@ export default function ClaimScreen() {
                 : spec.text}
             </Text>
           )}
+          {state?.teamId !== myTeamId && myAttemptResolved && (
+            <Text style={styles.attemptedNote}>
+              You already attempted this challenge here ({myAttempt!.status === 'fail' ? 'Failed' : 'Passed'}) — stealing it back will not grant a new one.
+            </Text>
+          )}
 
           {state?.teamId === myTeamId && spec && !isAttempted ? (
             <TouchableOpacity
@@ -713,6 +739,7 @@ const styles = StyleSheet.create({
   pendingText: { fontSize: 15, color: '#555', textAlign: 'center', marginVertical: 16, lineHeight: 24 },
   penaltyNote: { fontSize: 12, color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 4, lineHeight: 18 },
   attemptedText: { fontSize: 14, color: '#888', fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
+  attemptedNote: { fontSize: 13, color: '#e67e22', fontStyle: 'italic', marginTop: 8, textAlign: 'center' },
   resultIcon: { marginBottom: 12 },
   resultSub: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 8 },
   container: { flex: 1, backgroundColor: '#f5f5f5' },

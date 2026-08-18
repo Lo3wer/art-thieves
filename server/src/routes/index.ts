@@ -279,6 +279,9 @@ router.post('/games/:id/claim', validate(claimSchema), (req, res) => {
   startChallengeForClaim(game.id, landmarkId, teamId, landmark.challenge ?? null);
   store.addLogEntry(game.id, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
+    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    landmarkName: landmark.name,
+    ...(existing?.teamId ? { fromTeamName: store.getTeam(existing.teamId)?.name ?? 'Unknown' } : {}),
     latitude, longitude,
     ...(photo ? { photoId: photo.id, photoUrl: photo.url } : {}),
   });
@@ -305,12 +308,18 @@ router.post('/games/:id/challenge', validate(challengeSchema), (req, res) => {
     photoId,
   });
 
-  store.addLogEntry(game.id, `challenge_${outcome}`, { landmarkId, teamId });
+  const challengeLandmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  store.addLogEntry(game.id, `challenge_${outcome}`, {
+    landmarkId, teamId,
+    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    landmarkName: challengeLandmark?.name ?? 'a landmark',
+  });
   for (const voidedTeamId of result.voidedTeams) {
     const vt = store.getTeam(voidedTeamId);
     store.addLogEntry(game.id, 'challenge_voided', {
       landmarkId, teamId: voidedTeamId, byTeamId: teamId,
       teamName: vt?.name ?? 'Unknown',
+      landmarkName: challengeLandmark?.name ?? 'a landmark',
     });
   }
   checkWinAndEnd(game.id);
@@ -585,6 +594,27 @@ router.get('/games/:id/timeline', (req, res) => {
     })),
     events,
   });
+});
+
+// Per-team challenge attempts (lets a team see its own past attempts on
+// landmarks it no longer holds; landmarkStates only embeds the holder's view)
+router.get('/games/:id/challenge-attempts', (req, res) => {
+  const game = store.getGame(p(req.params.id));
+  if (!game) throw new AppError(404, 'Game not found');
+  const teamId = req.query.teamId as string | undefined;
+  if (!teamId) throw new AppError(400, 'teamId query parameter is required');
+  const team = store.getTeam(teamId);
+  if (!team || team.gameId !== game.id) throw new AppError(404, 'Team not found');
+  const attempts = store.getChallengeSessionsByGame(game.id)
+    .filter((a) => a.teamId === teamId)
+    .map((a) => ({
+      landmarkId: a.landmarkId,
+      status: a.status,
+      outcome: a.outcome ?? null,
+      startedAt: a.startedAt,
+      completedAt: a.completedAt ?? null,
+    }));
+  res.json({ teamId, attempts });
 });
 
 // Host debug controls: repair landmark state when something goes wrong mid-game.

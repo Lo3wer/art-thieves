@@ -161,6 +161,10 @@ export const api = USE_MOCKS
         request<LocationPing[]>(`/api/games/${gameId}/locations`),
       getPhotos: (gameId: string) =>
         request<Photo[]>(`/api/games/${gameId}/photos`),
+      getChallengeAttempts: (gameId: string, teamId: string) =>
+        request<{ teamId: string; attempts: { landmarkId: string; status: string; outcome: string | null; startedAt: string; completedAt: string | null }[] }>(
+          `/api/games/${gameId}/challenge-attempts?teamId=${teamId}`
+        ),
       getTimeline: (gameId: string) =>
         request<GameTimeline>(`/api/games/${gameId}/timeline`),
     };

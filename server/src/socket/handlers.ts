@@ -144,6 +144,9 @@ function processClaim(
   startChallengeForClaim(gameId, landmarkId, teamId, landmark.challenge ?? null);
   store.addLogEntry(gameId, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
+    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    landmarkName: landmark.name,
+    ...(existing?.teamId ? { fromTeamName: store.getTeam(existing.teamId)?.name ?? 'Unknown' } : {}),
   });
 
   const teams = store.getTeamsByGame(gameId);
@@ -183,13 +186,19 @@ function processChallenge(
     });
   }
 
-  store.addLogEntry(gameId, `challenge_${outcome}`, { landmarkId, teamId });
+  const challengeLandmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
+  store.addLogEntry(gameId, `challenge_${outcome}`, {
+    landmarkId, teamId,
+    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    landmarkName: challengeLandmark?.name ?? 'a landmark',
+  });
   if (result?.voidedTeams.length) {
     for (const voidedTeamId of result.voidedTeams) {
       const vt = store.getTeam(voidedTeamId);
       store.addLogEntry(gameId, 'challenge_voided', {
         landmarkId, teamId: voidedTeamId, byTeamId: teamId,
         teamName: vt?.name ?? 'Unknown',
+        landmarkName: challengeLandmark?.name ?? 'a landmark',
       });
     }
   }

@@ -29,9 +29,16 @@ export function normalizeGame(game: Game): Game {
   return { ...game, landmarkStates: game.landmarkStates.map(normalizeState) };
 }
 
+export interface MyChallengeAttempt {
+  status: string;
+  outcome: string | null;
+}
+
 interface GameStore {
   game: Game | null;
+  myAttempts: Record<string, MyChallengeAttempt>;
   setGame: (game: Game) => void;
+  setMyAttempts: (attempts: Record<string, MyChallengeAttempt>) => void;
   applyDiff: (diff: any) => void;
   updateStatus: (status: GameStatus) => void;
   updateLandmarkState: (state: LandmarkState) => void;
@@ -44,7 +51,9 @@ function normalizePenalties(penalties?: Penalty[]): Penalty[] | undefined {
 
 export const useGameStore = create<GameStore>((set) => ({
   game: null,
+  myAttempts: {},
   setGame: (game) => set({ game: normalizeGame(game) }),
+  setMyAttempts: (attempts) => set({ myAttempts: attempts }),
   applyDiff: (diff) =>
     set((s) => {
       if (!s.game) return s;
@@ -83,5 +92,5 @@ export const useGameStore = create<GameStore>((set) => ({
         game: { ...s.game, landmarkStates: [...states, newState] },
       };
     }),
-  clearGame: () => set({ game: null }),
+  clearGame: () => set({ game: null, myAttempts: {} }),
 }));

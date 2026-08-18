@@ -65,6 +65,7 @@ const DEFAULT_ZOOM = 14;
 
 export default function MapScreen() {
   const game = useGameStore((s) => s.game);
+  const myAttempts = useGameStore((s) => s.myAttempts);
   const ownLocation = useLocationStore((s) => s.ownLocation);
   const setOwnLocation = useLocationStore((s) => s.setOwnLocation);
   const teamLocations = useLocationStore((s) => s.teamLocations);
@@ -73,6 +74,23 @@ export default function MapScreen() {
   const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [mapMeta, setMapMeta] = useState<GameMap | null>(null);
+
+  useEffect(() => {
+    if (!game?.id || !myTeamId) return;
+    let active = true;
+    (async () => {
+      try {
+        const res = await api.getChallengeAttempts(game.id, myTeamId);
+        if (!active) return;
+        const map: Record<string, { status: string; outcome: string | null }> = {};
+        for (const a of res.attempts) map[a.landmarkId] = { status: a.status, outcome: a.outcome };
+        useGameStore.getState().setMyAttempts(map);
+      } catch {}
+    })();
+    return () => {
+      active = false;
+    };
+  }, [game?.id, game?.status, myTeamId]);
 
   useEffect(() => {
     let active = true;
@@ -355,14 +373,30 @@ export default function MapScreen() {
             </TouchableOpacity>
           </View>
           {landmarkState && (
-            <Text style={styles.statusText}>
-              {landmarkState.status === 'unclaimed'
-                ? 'Unclaimed'
-                : landmarkState.status === 'locked'
-                ? 'Locked'
-                : `Claimed by ${claimedTeam?.name ?? 'Unknown'}`}
-            </Text>
+            <View style={styles.statusRow}>
+              {landmarkState.status !== 'unclaimed' && (
+                <View
+                  style={[styles.teamDetailDot, { backgroundColor: claimedTeam?.color ?? '#999' }]}
+                />
+              )}
+              <Text style={styles.statusText}>
+                {landmarkState.status === 'unclaimed'
+                  ? 'Unclaimed'
+                  : landmarkState.status === 'locked'
+                  ? `Locked by ${claimedTeam?.name ?? 'Unknown'}`
+                  : `Claimed by ${claimedTeam?.name ?? 'Unknown'}`}
+              </Text>
+            </View>
           )}
+          {selectedLandmark && (() => {
+            const attempt = myAttempts[selectedLandmark.id];
+            if (!attempt || (attempt.status !== 'fail' && attempt.status !== 'pass')) return null;
+            return (
+              <Text style={styles.attemptedNote}>
+                You already attempted this challenge ({attempt.status === 'fail' ? 'Failed' : 'Passed'}) — no re-tries.
+              </Text>
+            );
+          })()}
           {(selectedLandmark.challenge?.text ?? selectedLandmark.challengeText) && (
             <Text style={styles.challengeText}>
               Challenge: {selectedLandmark.challenge?.text ?? selectedLandmark.challengeText}
@@ -429,6 +463,8 @@ const styles = StyleSheet.create({
   detailTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e', flex: 1 },
   closeBtn: { paddingLeft: 12, paddingVertical: 4 },
   statusText: { fontSize: 14, color: '#666', marginTop: 4 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  attemptedNote: { fontSize: 13, color: '#e67e22', fontStyle: 'italic', marginTop: 6 },
   challengeText: { fontSize: 13, color: '#888', marginTop: 6, fontStyle: 'italic' },
   penaltyBanner: {
     position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
