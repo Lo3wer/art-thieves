@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, FlatList,
   StyleSheet, Alert, Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useTeamStore } from '../stores/useTeamStore';
@@ -107,7 +108,7 @@ export default function TagScreen() {
     : '';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <FrozenBar />
 
       <Text style={styles.title}>Tag</Text>
@@ -174,18 +175,18 @@ export default function TagScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 16 },
-  sectionTitle: { fontSize: 16, color: '#666', marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, color: '#666', marginBottom: 8 },
   list: { flex: 1 },
   teamCard: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    padding: 16, borderRadius: 10, marginBottom: 8, elevation: 1,
+    padding: 12, borderRadius: 10, marginBottom: 6, elevation: 1,
   },
   teamCardDisabled: { opacity: 0.55 },
   teamDot: { width: 16, height: 16, borderRadius: 8, marginRight: 14 },
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
   teamNameDisabled: { color: '#999' },
   teamBadge: { fontSize: 12, fontWeight: '600', color: '#e74c3c', marginLeft: 8 },
   noTagCard: {
-    backgroundColor: '#fff', padding: 24, borderRadius: 12, alignItems: 'center', marginTop: 40,
+    backgroundColor: '#fff', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 24,
   },
   noTagTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
   noTagTimer: { fontSize: 40, fontWeight: 'bold', color: '#f39c12', fontVariant: ['tabular-nums'], marginBottom: 8 },

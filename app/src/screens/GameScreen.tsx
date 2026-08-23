@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
@@ -131,7 +132,7 @@ export default function GameScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Scoreboard</Text>
         <View style={styles.statusRow}>
@@ -220,13 +221,13 @@ export default function GameScreen() {
       )}
 
       <DebugMenu visible={showDebug} onClose={() => setShowDebug(false)} />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e' },
   joinCodeBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -239,8 +240,8 @@ const styles = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   statusText: { fontSize: 12, fontWeight: '700', color: '#666', letterSpacing: 1 },
   clockCard: {
-    backgroundColor: '#1a1a2e', padding: 20, borderRadius: 12,
-    alignItems: 'center', marginBottom: 16,
+    backgroundColor: '#1a1a2e', padding: 16, borderRadius: 12,
+    alignItems: 'center', marginBottom: 12,
   },
   clockValue: { fontSize: 48, fontWeight: 'bold', color: '#fff', fontVariant: ['tabular-nums'] },
   clockLabel: { fontSize: 14, color: '#aaa', marginTop: 4 },
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   scoreRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    padding: 14, borderRadius: 10, marginBottom: 8, elevation: 1,
+    padding: 12, borderRadius: 10, marginBottom: 6, elevation: 1,
   },
   rank: { fontSize: 18, fontWeight: 'bold', color: '#888', width: 36 },
   teamColor: { width: 14, height: 14, borderRadius: 7, marginRight: 12 },
@@ -268,10 +269,10 @@ const styles = StyleSheet.create({
     borderRadius: 6, marginLeft: 8,
   },
   kickButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  hostControls: { flexDirection: 'row', gap: 12, marginTop: 16, alignItems: 'center' },
-  pauseButton: { flex: 1, backgroundColor: '#f39c12', padding: 14, borderRadius: 10, alignItems: 'center' },
-  resumeButton: { flex: 1, backgroundColor: '#2ecc71', padding: 14, borderRadius: 10, alignItems: 'center' },
-  endButton: { flex: 1, backgroundColor: '#e74c3c', padding: 14, borderRadius: 10, alignItems: 'center' },
+  hostControls: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
+  pauseButton: { flex: 1, backgroundColor: '#f39c12', padding: 12, borderRadius: 10, alignItems: 'center' },
+  resumeButton: { flex: 1, backgroundColor: '#2ecc71', padding: 12, borderRadius: 10, alignItems: 'center' },
+  endButton: { flex: 1, backgroundColor: '#e74c3c', padding: 12, borderRadius: 10, alignItems: 'center' },
   debugButton: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10,

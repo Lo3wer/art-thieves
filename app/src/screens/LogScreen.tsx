@@ -3,6 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../services/api';
 import { useGameStore } from '../stores/useGameStore';
 import { useLogStore } from '../stores/useLogStore';
@@ -79,7 +80,7 @@ export default function LogScreen() {
     : entries;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Event Log</Text>
 
       <View style={styles.filterRow}>
@@ -135,14 +136,14 @@ export default function LogScreen() {
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 12 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   filterChip: {
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16,
     borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff',
@@ -151,8 +152,8 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, fontWeight: '500', color: '#666' },
   filterTextActive: { color: '#fff' },
   logItem: {
-    flexDirection: 'row', backgroundColor: '#fff', padding: 14,
-    borderRadius: 10, marginBottom: 6, elevation: 1,
+    flexDirection: 'row', backgroundColor: '#fff', padding: 12,
+    borderRadius: 10, marginBottom: 5, elevation: 1,
   },
   logIcon: { marginRight: 12, marginTop: 2, width: 24, alignItems: 'center' },
   logContent: { flex: 1 },

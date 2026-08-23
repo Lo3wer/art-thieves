@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator, FlatList,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { api } from '../services/api';
 import { uploadPhoto } from '../services/upload';
@@ -42,6 +43,7 @@ function challengeStateLabel(view: ChallengeView | undefined): string | null {
 }
 
 export default function ClaimScreen() {
+  const insets = useSafeAreaInsets();
   const game = useGameStore((s) => s.game);
   const myAttempts = useGameStore((s) => s.myAttempts);
   const updateLandmarkState = useGameStore((s) => s.updateLandmarkState);
@@ -377,7 +379,10 @@ export default function ClaimScreen() {
     return (
       <View style={styles.cameraContainer}>
         <CameraView ref={cameraRef} style={styles.camera} facing="front" />
-        <View style={styles.cameraOverlay} pointerEvents="box-none">
+        <View
+          style={[styles.cameraOverlay, { paddingBottom: insets.bottom + 20 }]}
+          pointerEvents="box-none"
+        >
           <Text style={styles.cameraHint}>
             {phase === 'challengePhoto' ? 'Take a photo as proof for your challenge' : 'Take a selfie with the landmark'}
           </Text>
@@ -398,7 +403,7 @@ export default function ClaimScreen() {
   if (phase === 'preview' || phase === 'challengePhotoPreview') {
     const isChallengePhoto = phase === 'challengePhotoPreview';
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <Text style={styles.sectionTitle}>{isChallengePhoto ? 'Preview Proof' : 'Preview Selfie'}</Text>
         {photo && <Image source={{ uri: photo }} style={styles.previewImage} />}
         <View style={styles.previewButtonRow}>
@@ -420,13 +425,13 @@ export default function ClaimScreen() {
         {isSteal && !isChallengePhoto && (
           <Text style={styles.stealWarning}>This landmark belongs to {owner?.name ?? 'another team'}</Text>
         )}
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (showStealModal) {
     return (
-      <View style={styles.stealContainer}>
+      <SafeAreaView style={styles.stealContainer}>
         <View style={styles.stealIcon}>
           <Icon spec={ICONS.swords} size={48} />
         </View>
@@ -440,7 +445,7 @@ export default function ClaimScreen() {
         <TouchableOpacity style={styles.secondaryButton} onPress={reset}>
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -449,7 +454,7 @@ export default function ClaimScreen() {
     const needsPhoto = isDelayed && !!spec.delayed?.requiresPhoto;
 
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <Text style={styles.sectionTitle}>Challenge</Text>
         <Text style={styles.challengePrompt}>{spec.text}</Text>
 
@@ -530,7 +535,7 @@ export default function ClaimScreen() {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -544,7 +549,7 @@ export default function ClaimScreen() {
     };
     const view = result ? RESULT_VIEW[result.kind] : RESULT_VIEW.claim;
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <View style={styles.resultIcon}>
           <Icon spec={view.icon} size={48} />
         </View>
@@ -553,12 +558,12 @@ export default function ClaimScreen() {
         <TouchableOpacity style={styles.primaryButton} onPress={reset}>
           <Text style={styles.buttonText}>Done</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
 
       <View style={styles.tabBar}>
         <TouchableOpacity
@@ -694,7 +699,7 @@ export default function ClaimScreen() {
           )}
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -704,34 +709,34 @@ const styles = StyleSheet.create({
   camera: { flex: 1 },
   cameraOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 60,
+    justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 20,
   },
   cameraHint: { color: '#fff', fontSize: 16, marginBottom: 24, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   snapButton: { width: 72, height: 72, borderRadius: 36, borderWidth: 4, borderColor: '#fff', justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
   snapInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
   cancelButton: { padding: 12 },
   cancelText: { color: '#fff', fontSize: 16 },
-  previewImage: { width: 280, height: 360, borderRadius: 12, marginVertical: 16 },
-  previewButtonRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 24 },
+  previewImage: { width: 260, height: 330, borderRadius: 12, marginVertical: 12 },
+  previewButtonRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 16 },
   retakeButton: {
-    flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center',
+    flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center',
     justifyContent: 'center', backgroundColor: '#fff',
     borderWidth: 1, borderColor: '#c8c8c8',
   },
   retakeButtonText: { color: '#1a1a2e', fontSize: 16, fontWeight: '600' },
   confirmButton: {
-    flex: 1, backgroundColor: '#1a1a2e', paddingVertical: 14,
+    flex: 1, backgroundColor: '#1a1a2e', paddingVertical: 12,
     borderRadius: 10, alignItems: 'center', justifyContent: 'center',
   },
-  primaryButtonWrap: { marginTop: 16 },
-  secondaryButtonWrap: { marginTop: 8 },
+  primaryButtonWrap: { marginTop: 12 },
+  secondaryButtonWrap: { marginTop: 6 },
   primaryButton: {
-    backgroundColor: '#1a1a2e', paddingVertical: 14, paddingHorizontal: 32,
+    backgroundColor: '#1a1a2e', paddingVertical: 12, paddingHorizontal: 28,
     borderRadius: 10, marginTop: 16,
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  secondaryButton: { paddingVertical: 12, paddingHorizontal: 24, marginTop: 8 },
+  secondaryButton: { paddingVertical: 10, paddingHorizontal: 24, marginTop: 6 },
   secondaryButtonText: { color: '#1a1a2e', fontSize: 16 },
   sectionTitle: { fontSize: 22, fontWeight: 'bold', color: '#1a1a2e', marginBottom: 8, textAlign: 'center' },
   gap12: { gap: 12 },

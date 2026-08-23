@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, FlatList,
   StyleSheet, ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { api } from '../services/api';
@@ -68,10 +69,10 @@ export default function SummaryScreen() {
 
   if (loading || !summary) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color="#1a1a2e" />
         <Text style={styles.loadingText}>Compiling results...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -87,7 +88,7 @@ export default function SummaryScreen() {
   const winnerColor = summary.winner.color ?? '#1a1a2e';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Game Over</Text>
 
       <View style={[styles.winnerCard, { backgroundColor: winnerColor }]}>
@@ -212,7 +213,7 @@ export default function SummaryScreen() {
           <Text style={styles.returnButtonText}>Return to Lobby</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -220,9 +221,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
   loadingText: { marginTop: 12, fontSize: 16, color: '#666' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', marginBottom: 12 },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', marginBottom: 8 },
   winnerCard: {
-    padding: 20, borderRadius: 12, alignItems: 'center', marginBottom: 16,
+    padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12,
   },
   winnerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
   winnerSub: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
@@ -256,15 +257,15 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: 'bold', color: '#1a1a2e' },
   statLabel: { fontSize: 11, color: '#888', marginTop: 2 },
   emptyText: { fontSize: 14, color: '#888', textAlign: 'center', marginTop: 24 },
-  footerButtons: { gap: 8, marginTop: 8 },
+  footerButtons: { gap: 6, marginTop: 6 },
   mapButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#fff', paddingVertical: 14, borderRadius: 12,
+    backgroundColor: '#fff', paddingVertical: 12, borderRadius: 12,
     borderWidth: 1, borderColor: '#c8c8c8',
   },
   mapButtonText: { color: '#1a1a2e', fontSize: 16, fontWeight: '600' },
   returnButton: {
-    backgroundColor: '#1a1a2e', paddingVertical: 16, borderRadius: 12,
+    backgroundColor: '#1a1a2e', paddingVertical: 13, borderRadius: 12,
     alignItems: 'center', marginTop: 0,
   },
   returnButtonText: { color: '#fff', fontSize: 18, fontWeight: '600' },

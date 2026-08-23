@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { Map, Camera, GeoJSONSource, Layer, Marker as MapMarker } from '@maplibre/maplibre-react-native';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useGameStore } from '../stores/useGameStore';
 import { useLocationStore } from '../stores/useLocationStore';
@@ -65,6 +66,7 @@ const DEFAULT_CENTER: [number, number] = [-123.1207, 49.2827];
 const DEFAULT_ZOOM = 14;
 
 export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const game = useGameStore((s) => s.game);
   const myAttempts = useGameStore((s) => s.myAttempts);
@@ -286,7 +288,7 @@ export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) 
   return (
     <View style={styles.container}>
       {readOnly && (
-        <View style={styles.finalMapBar}>
+        <View style={[styles.finalMapBar, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.navigate('Summary')}
@@ -386,7 +388,7 @@ export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) 
       </Map>
 
       {selectedTeamId && selectedTeamLoc && selectedTeamInfo && (
-        <View style={styles.detailPanel}>
+        <View style={[styles.detailPanel, { bottom: insets.bottom + 12 }]}>
           <View style={styles.detailHeader}>
             <View style={styles.detailHeaderLeft}>
               <View style={[styles.teamDetailDot, { backgroundColor: selectedTeamInfo.color }]} />
@@ -401,7 +403,7 @@ export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) 
       )}
 
       {selectedLandmark && !selectedTeamId && (
-        <View style={styles.detailPanel}>
+        <View style={[styles.detailPanel, { bottom: insets.bottom + 12 }]}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>{selectedLandmark.name}</Text>
             <TouchableOpacity onPress={closePanel} style={styles.closeBtn}>
@@ -448,7 +450,7 @@ export default function MapScreen({ readOnly = false }: { readOnly?: boolean }) 
       )}
 
       {isMockLocationEnabled() && (
-        <View style={styles.mockPanel}>
+        <View style={[styles.mockPanel, { top: insets.top + 8 }]}>
           <View style={styles.mockHeader}>
             <Text style={styles.mockTitle}>Mock Location</Text>
             <TouchableOpacity
@@ -481,7 +483,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   finalMapBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 12, paddingTop: 48, paddingBottom: 8, backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, backgroundColor: '#f5f5f5',
   },
   backBtn: { padding: 8 },
   finalMapTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a2e' },
@@ -494,7 +496,7 @@ const styles = StyleSheet.create({
   teamHalo: { width: TEAM_HALO, height: TEAM_HALO, borderRadius: TEAM_HALO / 2 },
   teamHaloSelected: { borderWidth: 3, borderColor: '#1a1a2e' },
   detailPanel: {
-    position: 'absolute', bottom: 20, left: 16, right: 16,
+    position: 'absolute', bottom: 12, left: 16, right: 16,
     backgroundColor: '#fff', borderRadius: 14, padding: 18,
     elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15, shadowRadius: 6,
@@ -509,20 +511,20 @@ const styles = StyleSheet.create({
   attemptedNote: { fontSize: 13, color: '#e67e22', fontStyle: 'italic', marginTop: 6 },
   challengeText: { fontSize: 13, color: '#888', marginTop: 6, fontStyle: 'italic' },
   penaltyBanner: {
-    position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
+    position: 'absolute', top: 8, left: 16, right: 16, zIndex: 10,
     backgroundColor: '#1a1a2e', borderRadius: 12, padding: 12,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   penaltyBannerText: { color: '#fff', fontSize: 13, fontWeight: '600', textAlign: 'center' },
   challengeBanner: {
-    position: 'absolute', top: 16, left: 16, right: 16, zIndex: 10,
+    position: 'absolute', top: 8, left: 16, right: 16, zIndex: 10,
     backgroundColor: '#e67e22', borderRadius: 12, padding: 12,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   nearbyText: { fontSize: 14, fontWeight: '600', color: '#2ecc71', marginTop: 8 },
   distantText: { fontSize: 13, color: '#e74c3c', marginTop: 8 },
   mockPanel: {
-    position: 'absolute', top: 16, left: 16, right: 16,
+    position: 'absolute', top: 8, left: 16, right: 16,
     backgroundColor: 'rgba(26, 26, 46, 0.9)', borderRadius: 12, padding: 12,
   },
   mockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
