@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError, describeError } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 import { saveSession, clearSession } from '../services/session';
@@ -229,10 +230,10 @@ export default function LobbyScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color="#1a1a2e" />
         <Text style={styles.loadingText}>Processing...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -241,11 +242,13 @@ export default function LobbyScreen() {
     const isHost = useTeamStore.getState().isHost;
     const myTeamId = useTeamStore.getState().myTeamId;
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.title}>Game Lobby</Text>
         <View style={styles.codeCard}>
           <View style={styles.codeBox}>
-            <Text style={styles.codeValue}>{gameCode}</Text>
+            <Text style={styles.codeValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {gameCode}
+            </Text>
           </View>
           <Text style={styles.codeHint}>Share this code for others to join</Text>
         </View>
@@ -276,13 +279,13 @@ export default function LobbyScreen() {
         <TouchableOpacity style={styles.secondaryButton} onPress={handleLeaveGame}>
           <Text style={styles.secondaryButtonText}>Leave Game</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (view === 'host_map_select') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.title}>Select Map</Text>
         {loadingMaps && maps.length === 0 ? (
           <View style={styles.mapLoading}>
@@ -324,144 +327,148 @@ export default function LobbyScreen() {
         <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('home')}>
           <Text style={styles.secondaryButtonText}>Back</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (view === 'host_settings') {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Game Settings</Text>
-        {selectedMap && (
-          <View style={styles.selectedMapCard}>
-            <Text style={styles.mapName}>{selectedMap.name}</Text>
-            <Text style={styles.mapDetail}>Default radius: {selectedMap.defaultVicinityRadius}m</Text>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.title}>Game Settings</Text>
+          {selectedMap && (
+            <View style={styles.selectedMapCard}>
+              <Text style={styles.mapName}>{selectedMap.name}</Text>
+              <Text style={styles.mapDetail}>Default radius: {selectedMap.defaultVicinityRadius}m</Text>
+            </View>
+          )}
+          <Text style={styles.fieldLabel}>Duration (minutes)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.duration / 60)}
+            onChangeText={(t) => setConfig({ ...config, duration: Math.max(1, parseInt(t) || 1) * 60 })}
+          />
+          <Text style={styles.fieldLabel}>Vicinity Radius (meters)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.vicinityRadius)}
+            onChangeText={(t) => setConfig({ ...config, vicinityRadius: Math.max(10, parseInt(t) || 10) })}
+          />
+          <Text style={styles.fieldLabel}>Win Threshold</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.winThreshold)}
+            onChangeText={(t) => setConfig({ ...config, winThreshold: Math.max(1, parseInt(t) || 1) })}
+          />
+          <Text style={styles.fieldLabel}>Re-tag Cooldown (seconds)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.reTagCooldown)}
+            onChangeText={(t) => setConfig({ ...config, reTagCooldown: Math.max(0, parseInt(t) || 0) })}
+          />
+          <Text style={styles.fieldLabel}>Dispute Window (seconds)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.disputeWindow)}
+            onChangeText={(t) => setConfig({ ...config, disputeWindow: Math.max(10, parseInt(t) || 10) })}
+          />
+          <Text style={styles.fieldLabel}>No-Tag Grace Period (seconds)</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="number-pad"
+            value={String(config.noTagPeriod)}
+            onChangeText={(t) => setConfig({ ...config, noTagPeriod: Math.max(0, parseInt(t) || 0) })}
+          />
+          <Text style={styles.fieldLabel}>Your Team Name</Text>
+          <TextInput
+            style={styles.input}
+            value={teamName}
+            onChangeText={setTeamName}
+            placeholder="Enter team name"
+          />
+          <Text style={styles.fieldLabel}>Team Color</Text>
+          <View style={styles.colorRow}>
+            {TEAM_COLORS.map((c) => (
+              <TouchableOpacity
+                key={c}
+                style={[styles.colorSwatch, { backgroundColor: c }, teamColor === c && styles.colorSelected]}
+                onPress={() => setTeamColor(c)}
+              />
+            ))}
           </View>
-        )}
-        <Text style={styles.fieldLabel}>Duration (minutes)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.duration / 60)}
-          onChangeText={(t) => setConfig({ ...config, duration: Math.max(1, parseInt(t) || 1) * 60 })}
-        />
-        <Text style={styles.fieldLabel}>Vicinity Radius (meters)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.vicinityRadius)}
-          onChangeText={(t) => setConfig({ ...config, vicinityRadius: Math.max(10, parseInt(t) || 10) })}
-        />
-        <Text style={styles.fieldLabel}>Win Threshold</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.winThreshold)}
-          onChangeText={(t) => setConfig({ ...config, winThreshold: Math.max(1, parseInt(t) || 1) })}
-        />
-        <Text style={styles.fieldLabel}>Re-tag Cooldown (seconds)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.reTagCooldown)}
-          onChangeText={(t) => setConfig({ ...config, reTagCooldown: Math.max(0, parseInt(t) || 0) })}
-        />
-        <Text style={styles.fieldLabel}>Dispute Window (seconds)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.disputeWindow)}
-          onChangeText={(t) => setConfig({ ...config, disputeWindow: Math.max(10, parseInt(t) || 10) })}
-        />
-        <Text style={styles.fieldLabel}>No-Tag Grace Period (seconds)</Text>
-        <TextInput
-          style={styles.input}
-          keyboardType="number-pad"
-          value={String(config.noTagPeriod)}
-          onChangeText={(t) => setConfig({ ...config, noTagPeriod: Math.max(0, parseInt(t) || 0) })}
-        />
-        <Text style={styles.fieldLabel}>Your Team Name</Text>
-        <TextInput
-          style={styles.input}
-          value={teamName}
-          onChangeText={setTeamName}
-          placeholder="Enter team name"
-        />
-        <Text style={styles.fieldLabel}>Team Color</Text>
-        <View style={styles.colorRow}>
-          {TEAM_COLORS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.colorSwatch, { backgroundColor: c }, teamColor === c && styles.colorSelected]}
-              onPress={() => setTeamColor(c)}
-            />
-          ))}
-        </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleCreateGame}>
-          <Text style={styles.buttonText}>Create Game</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('host_map_select')}>
-          <Text style={styles.secondaryButtonText}>Back</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleCreateGame}>
+            <Text style={styles.buttonText}>Create Game</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('host_map_select')}>
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   if (view === 'join') {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Join Game</Text>
-        <Text style={styles.fieldLabel}>Join Code</Text>
-        <TextInput
-          style={styles.input}
-          value={joinCode}
-          onChangeText={setJoinCode}
-          placeholder="Enter 6-character code"
-          autoCapitalize="characters"
-        />
-        <Text style={styles.fieldLabel}>Your Team Name</Text>
-        <TextInput
-          style={styles.input}
-          value={teamName}
-          onChangeText={setTeamName}
-          placeholder="Enter team name"
-        />
-        <Text style={styles.fieldLabel}>Team Color</Text>
-        {existingJoinTeams.length > 0 && (
-          <Text style={styles.takenHint}>
-            Teams already in game: {existingJoinTeams.map((t) => t.name).join(', ')}
-          </Text>
-        )}
-        <View style={styles.colorRow}>
-          {TEAM_COLORS.map((c) => {
-            const taken = takenColors.has(c);
-            return (
-              <TouchableOpacity
-                key={c}
-                disabled={taken}
-                style={[
-                  styles.colorSwatch,
-                  { backgroundColor: c },
-                  teamColor === c && styles.colorSelected,
-                  taken && styles.colorTaken,
-                ]}
-                onPress={() => setTeamColor(c)}
-              />
-            );
-          })}
-        </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleJoinGame}>
-          <Text style={styles.buttonText}>Join</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('home')}>
-          <Text style={styles.secondaryButtonText}>Back</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <Text style={styles.title}>Join Game</Text>
+          <Text style={styles.fieldLabel}>Join Code</Text>
+          <TextInput
+            style={styles.input}
+            value={joinCode}
+            onChangeText={setJoinCode}
+            placeholder="Enter 6-character code"
+            autoCapitalize="characters"
+          />
+          <Text style={styles.fieldLabel}>Your Team Name</Text>
+          <TextInput
+            style={styles.input}
+            value={teamName}
+            onChangeText={setTeamName}
+            placeholder="Enter team name"
+          />
+          <Text style={styles.fieldLabel}>Team Color</Text>
+          {existingJoinTeams.length > 0 && (
+            <Text style={styles.takenHint}>
+              Teams already in game: {existingJoinTeams.map((t) => t.name).join(', ')}
+            </Text>
+          )}
+          <View style={styles.colorRow}>
+            {TEAM_COLORS.map((c) => {
+              const taken = takenColors.has(c);
+              return (
+                <TouchableOpacity
+                  key={c}
+                  disabled={taken}
+                  style={[
+                    styles.colorSwatch,
+                    { backgroundColor: c },
+                    teamColor === c && styles.colorSelected,
+                    taken && styles.colorTaken,
+                  ]}
+                  onPress={() => setTeamColor(c)}
+                />
+              );
+            })}
+          </View>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleJoinGame}>
+            <Text style={styles.buttonText}>Join</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => setView('home')}>
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Art Thieves</Text>
       <Text style={styles.subtitle}>Compete to claim art landmarks across the city!</Text>
       <View style={styles.homeButtons}>
@@ -488,36 +495,37 @@ export default function LobbyScreen() {
           <Text style={styles.outlineButtonText}>Join Game</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#f5f5f5' },
   container: { flex: 1, backgroundColor: '#f5f5f5', padding: 20 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  scrollContent: { paddingBottom: 40 },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#666' },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 32 },
-  homeButtons: { gap: 16, marginTop: 32 },
+  scrollContent: { paddingBottom: 20 },
+  loadingText: { marginTop: 8, fontSize: 16, color: '#666' },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#1a1a2e', textAlign: 'center', marginBottom: 6 },
+  subtitle: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 20 },
+  homeButtons: { gap: 10, marginTop: 20 },
   primaryButton: {
-    backgroundColor: '#1a1a2e', paddingVertical: 16, borderRadius: 12,
-    alignItems: 'center', marginTop: 16,
+    backgroundColor: '#1a1a2e', paddingVertical: 13, borderRadius: 12,
+    alignItems: 'center', marginTop: 12,
   },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  buttonText: { color: '#fff', fontSize: 17, fontWeight: '600' },
   outlineButton: {
-    borderWidth: 2, borderColor: '#1a1a2e', paddingVertical: 16,
+    borderWidth: 2, borderColor: '#1a1a2e', paddingVertical: 13,
     borderRadius: 12, alignItems: 'center',
   },
   outlineButtonText: { color: '#1a1a2e', fontSize: 18, fontWeight: '600' },
-  secondaryButton: { paddingVertical: 12, alignItems: 'center', marginTop: 8 },
-  secondaryButtonText: { color: '#1a1a2e', fontSize: 16 },
+  secondaryButton: { paddingVertical: 10, alignItems: 'center', marginTop: 4 },
+  secondaryButtonText: { color: '#1a1a2e', fontSize: 15 },
   input: {
     borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12,
-    fontSize: 16, backgroundColor: '#fff', marginBottom: 12,
+    fontSize: 16, backgroundColor: '#fff', marginBottom: 8,
   },
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4, marginTop: 8 },
-  colorRow: { flexDirection: 'row', gap: 12, marginBottom: 16, marginTop: 4 },
+  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 3, marginTop: 6 },
+  colorRow: { flexDirection: 'row', gap: 12, marginBottom: 12, marginTop: 3 },
   colorSwatch: { width: 36, height: 36, borderRadius: 18 },
   colorSelected: { borderWidth: 3, borderColor: '#1a1a2e' },
   colorTaken: { opacity: 0.25, borderWidth: 2, borderColor: '#999' },
@@ -546,14 +554,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f4f8', padding: 12, borderRadius: 8, marginBottom: 16,
   },
   codeCard: {
-    backgroundColor: '#fff', padding: 20, borderRadius: 16, alignItems: 'center',
-    marginVertical: 20, borderWidth: 1, borderColor: '#e0e0e0',
+    backgroundColor: '#fff', padding: 14, borderRadius: 16, alignItems: 'center',
+    marginVertical: 12, borderWidth: 1, borderColor: '#e0e0e0',
   },
   codeBox: {
-    backgroundColor: '#1a1a2e', paddingVertical: 16, paddingHorizontal: 32,
-    borderRadius: 12, marginVertical: 8,
+    alignSelf: 'stretch', backgroundColor: '#1a1a2e', paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 12, marginVertical: 6,
   },
-  codeValue: { fontSize: 48, fontWeight: 'bold', color: '#ffffff', letterSpacing: 10 },
+  codeValue: { fontSize: 40, fontWeight: 'bold', color: '#ffffff', letterSpacing: 6, textAlign: 'center' },
   codeHint: { fontSize: 13, color: '#888' },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a2e', marginTop: 8 },
   rosterList: { flex: 1, marginTop: 8 },
