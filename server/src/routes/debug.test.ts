@@ -78,21 +78,21 @@ describe('host debug endpoints', () => {
 
   test('host can clear and re-open a challenge attempt', async () => {
     const { gameId, hostTeamId, landmarkId } = await setupGame();
-    const session = store.startChallengeSession(gameId, landmarkId, hostTeamId);
-    store.resolveChallengeSession(gameId, landmarkId, hostTeamId, 'fail');
-    assert.equal(store.getChallengeSession(gameId, landmarkId, hostTeamId)?.status, 'fail');
+    const session = await store.startChallengeSession(gameId, landmarkId, hostTeamId);
+    await store.resolveChallengeSession(gameId, landmarkId, hostTeamId, 'fail');
+    assert.equal((await store.getChallengeSession(gameId, landmarkId, hostTeamId))?.status, 'fail');
 
     const clear = await request(app)
       .put(`/api/games/${gameId}/debug/challenge-attempt`)
       .send({ teamId: hostTeamId, landmarkId, targetTeamId: hostTeamId, action: 'clear-attempt' });
     assert.equal(clear.status, 200);
-    assert.equal(store.getChallengeSession(gameId, landmarkId, hostTeamId), null);
+    assert.equal(await store.getChallengeSession(gameId, landmarkId, hostTeamId), null);
 
     const reopen = await request(app)
       .put(`/api/games/${gameId}/debug/challenge-attempt`)
       .send({ teamId: hostTeamId, landmarkId, targetTeamId: hostTeamId, action: 'set-pending' });
     assert.equal(reopen.status, 200);
-    assert.equal(store.getChallengeSession(gameId, landmarkId, hostTeamId)?.status, 'ready');
+    assert.equal((await store.getChallengeSession(gameId, landmarkId, hostTeamId))?.status, 'ready');
   });
 
   test('non-host callers get 403', async () => {

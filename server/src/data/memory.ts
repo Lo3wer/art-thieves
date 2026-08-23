@@ -46,6 +46,30 @@ export const store = {
 
   // Games
   getGames: () => [...games],
+  deleteGame: (id: string) => {
+    const idx = games.findIndex((g) => g.id === id);
+    if (idx === -1) return false;
+    games.splice(idx, 1);
+    for (const collection of [teams, landmarks, landmarkStates, challengeAttempts, penalties, locationPings, tagEvents, pushTokens, photos, eventLog]) {
+      for (let i = collection.length - 1; i >= 0; i--) {
+        if (collection[i].gameId === id) collection.splice(i, 1);
+      }
+    }
+    return true;
+  },
+  clearGames: () => {
+    games.length = 0;
+    teams.length = 0;
+    landmarks.length = 0;
+    landmarkStates.length = 0;
+    challengeAttempts.length = 0;
+    penalties.length = 0;
+    locationPings.length = 0;
+    tagEvents.length = 0;
+    pushTokens.length = 0;
+    photos.length = 0;
+    eventLog.length = 0;
+  },
   getGame: (id: string) => games.find((g) => g.id === id) ?? null,
   getGameByJoinCode: (code: string) => games.find((g) => g.joinCode === code) ?? null,
   createGame: (mapId: string, config: Game['config']) => {

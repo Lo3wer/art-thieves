@@ -9,11 +9,7 @@ import routes from './routes';
 import { registerGameHandlers } from './socket/handlers';
 import { setIO } from './socket/broadcast';
 import { rescheduleAllActiveGames } from './game/timer';
-import { initDb, isPersistent, getUploadsDir } from './data/db';
-
-if (isPersistent()) {
-  initDb();
-}
+import { initializeDatabase, getUploadsDir } from './data/db';
 
 const app = express();
 const server = http.createServer(app);
@@ -36,13 +32,21 @@ registerGameHandlers(io);
 
 app.use(errorHandler);
 
-server.listen(PORT, '0.0.0.0', () => {
-  rescheduleAllActiveGames();
-  const nets = networkInterfaces();
-  const ip =
-    Object.values(nets)
-      .flat()
-      .find((n) => n && n.family === 'IPv4' && !n.internal)
-      ?.address ?? 'unknown';
-  console.log(`Server running on http://localhost:${PORT} (LAN: http://${ip}:${PORT})`);
+async function startServer(): Promise<void> {
+  await initializeDatabase();
+  await rescheduleAllActiveGames();
+  server.listen(PORT, '0.0.0.0', () => {
+    const nets = networkInterfaces();
+    const ip =
+      Object.values(nets)
+        .flat()
+        .find((n) => n && n.family === 'IPv4' && !n.internal)
+        ?.address ?? 'unknown';
+    console.log(`Server running on http://localhost:${PORT} (LAN: http://${ip}:${PORT})`);
+  });
+}
+
+void startServer().catch((error) => {
+  console.error('Failed to initialize server:', error);
+  process.exitCode = 1;
 });

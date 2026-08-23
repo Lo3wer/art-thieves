@@ -13,6 +13,9 @@ let dbInstance: BetterSQLite3Database<typeof schema> | null = null;
 let uploadsPath: string | null = null;
 
 export function isPersistent(): boolean {
+  const driver = process.env.DB_DRIVER?.toLowerCase();
+  if (driver === 'memory') return false;
+  if (driver === 'sqlite' || driver === 'postgres') return true;
   if (process.env.DB_IN_MEMORY === '1') return false;
   return (process.env.PERSIST ?? 'true').toLowerCase() !== 'false';
 }
@@ -32,6 +35,9 @@ export function getDbPath(): string {
 
 export function initDb(): BetterSQLite3Database<typeof schema> {
   if (dbInstance) return dbInstance;
+  if ((process.env.DB_DRIVER ?? 'sqlite').toLowerCase() === 'postgres') {
+    throw new Error('initDb() is only available for SQLite; use initializeDatabase() for PostgreSQL');
+  }
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const sqlite = new Database(DB_PATH);
   sqlite.pragma('journal_mode = WAL');
@@ -39,6 +45,18 @@ export function initDb(): BetterSQLite3Database<typeof schema> {
   dbInstance = drizzle(sqlite, { schema });
   migrate(dbInstance, { migrationsFolder: MIGRATIONS_DIR });
   return dbInstance;
+}
+
+export async function initializeDatabase(): Promise<void> {
+  if (!isPersistent()) return;
+  if ((process.env.DB_DRIVER ?? 'sqlite').toLowerCase() === 'postgres') {
+    const { postgresReady } = await import('./db-postgres');
+    await postgresReady();
+    const { seedPostgresMaps } = await import('./store-postgres');
+    await seedPostgresMaps();
+    return;
+  }
+  initDb();
 }
 
 export function getDb(): BetterSQLite3Database<typeof schema> {

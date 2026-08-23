@@ -13,23 +13,23 @@ export function registerGameHandlers(io: Server): void {
     let currentGameId: string | null = null;
     let currentTeamId: string | null = null;
 
-    socket.on('join_game', ({ gameId, teamId }: { gameId: string; teamId: string }) => {
+    socket.on('join_game', async ({ gameId, teamId }: { gameId: string; teamId: string }) => {
       currentGameId = gameId;
       currentTeamId = teamId;
       socket.data.teamId = teamId;
       socket.join(`game:${gameId}`);
-      const state = buildRoomState(gameId, teamId);
+      const state = await buildRoomState(gameId, teamId);
       if (state) {
         socket.emit('state_update', { game: state });
-        seedSnapshot(gameId);
+        await seedSnapshot(gameId);
       }
     });
 
-    socket.on('location_update', ({ latitude, longitude }: { latitude: number; longitude: number }) => {
+    socket.on('location_update', async ({ latitude, longitude }: { latitude: number; longitude: number }) => {
       if (!currentGameId || !currentTeamId) return;
       const gameId = currentGameId;
       const senderTeamId = currentTeamId;
-      store.addLocationPing(gameId, senderTeamId, latitude, longitude);
+      await store.addLocationPing(gameId, senderTeamId, latitude, longitude);
       const room = `game:${gameId}`;
       const payload = {
         teamId: senderTeamId,
@@ -46,7 +46,7 @@ export function registerGameHandlers(io: Server): void {
           if (
             recipientTeamId &&
             recipientTeamId !== senderTeamId &&
-            hasActiveChallenge(gameId, recipientTeamId)
+            await hasActiveChallenge(gameId, recipientTeamId)
           ) {
             continue;
           }
@@ -55,57 +55,57 @@ export function registerGameHandlers(io: Server): void {
       })();
     });
 
-    socket.on('claim_landmark', ({ landmarkId, latitude, longitude }: { landmarkId: string; latitude: number; longitude: number }) => {
+    socket.on('claim_landmark', async ({ landmarkId, latitude, longitude }: { landmarkId: string; latitude: number; longitude: number }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processClaim(currentGameId, currentTeamId, landmarkId, latitude, longitude, socket, gameNsp); }
+      try { await processClaim(currentGameId, currentTeamId, landmarkId, latitude, longitude, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('complete_challenge', ({ landmarkId }: { landmarkId: string }) => {
+    socket.on('complete_challenge', async ({ landmarkId }: { landmarkId: string }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processChallenge(currentGameId, currentTeamId, landmarkId, 'complete', socket, gameNsp); }
+      try { await processChallenge(currentGameId, currentTeamId, landmarkId, 'complete', socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('fail_challenge', ({ landmarkId }: { landmarkId: string }) => {
+    socket.on('fail_challenge', async ({ landmarkId }: { landmarkId: string }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processChallenge(currentGameId, currentTeamId, landmarkId, 'fail', socket, gameNsp); }
+      try { await processChallenge(currentGameId, currentTeamId, landmarkId, 'fail', socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('pass_challenge', ({ landmarkId }: { landmarkId: string }) => {
+    socket.on('pass_challenge', async ({ landmarkId }: { landmarkId: string }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processChallenge(currentGameId, currentTeamId, landmarkId, 'pass', socket, gameNsp); }
+      try { await processChallenge(currentGameId, currentTeamId, landmarkId, 'pass', socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('tag_team', ({ targetTeamId }: { targetTeamId: string }) => {
+    socket.on('tag_team', async ({ targetTeamId }: { targetTeamId: string }) => {
       if (!currentGameId || !currentTeamId) return;
-      try { processTag(currentGameId, currentTeamId, targetTeamId, socket, gameNsp); }
+      try { await processTag(currentGameId, currentTeamId, targetTeamId, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('dispute_tag', () => {
+    socket.on('dispute_tag', async () => {
       if (!currentGameId || !currentTeamId) return;
-      try { processDispute(currentGameId, currentTeamId, socket, gameNsp); }
+      try { await processDispute(currentGameId, currentTeamId, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('pause_game', () => {
+    socket.on('pause_game', async () => {
       if (!currentGameId) return;
-      try { processPause(currentGameId, socket, gameNsp); }
+      try { await processPause(currentGameId, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('resume_game', () => {
+    socket.on('resume_game', async () => {
       if (!currentGameId) return;
-      try { processResume(currentGameId, socket, gameNsp); }
+      try { await processResume(currentGameId, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
-    socket.on('end_game', () => {
+    socket.on('end_game', async () => {
       if (!currentGameId) return;
-      try { processEnd(currentGameId, socket, gameNsp); }
+      try { await processEnd(currentGameId, socket, gameNsp); }
       catch (e: any) { socket.emit('error', { message: e.message }); }
     });
 
@@ -113,70 +113,72 @@ export function registerGameHandlers(io: Server): void {
   });
 }
 
-function getGameOrThrow(gameId: string): NonNullable<ReturnType<typeof store.getGame>> {
-  const game = store.getGame(gameId);
+async function getGameOrThrow(gameId: string): Promise<NonNullable<Awaited<ReturnType<typeof store.getGame>>>> {
+  const game = await store.getGame(gameId);
   if (!game) throw new Error('Game not found');
   return game;
 }
 
-function processClaim(
+async function processClaim(
   gameId: string, teamId: string, landmarkId: string,
   latitude: number, longitude: number,
   socket: Socket, nsp: ReturnType<Server['of']>
-): void {
-  const game = getGameOrThrow(gameId);
+): Promise<void> {
+  const game = await getGameOrThrow(gameId);
   if (game.status !== 'active') throw new Error('Game is not active');
-  if (isTeamFrozen(gameId, teamId)) throw new Error('Your team is frozen');
+  if (await isTeamFrozen(gameId, teamId)) throw new Error('Your team is frozen');
 
-  const landmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(gameId)).find((l) => l.id === landmarkId);
   if (!landmark) throw new Error('Landmark not found');
 
   if (!isWithinVicinity(latitude, longitude, landmark.latitude, landmark.longitude, game.config.vicinityRadius)) {
     throw new Error('Too far from landmark');
   }
 
-  const existing = store.getLandmarkStates(gameId).find((s) => s.landmarkId === landmarkId);
+  const existing = (await store.getLandmarkStates(gameId)).find((s) => s.landmarkId === landmarkId);
   if (existing?.locked) throw new Error('Landmark is locked');
   if (existing?.teamId === teamId) throw new Error('Already claimed by your team');
 
   const isSteal = existing?.teamId != null && existing.teamId !== teamId;
-  store.upsertLandmarkState(gameId, landmarkId, teamId, false);
-  startChallengeForClaim(gameId, landmarkId, teamId, landmark.challenge ?? null);
-  store.addLogEntry(gameId, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
+  await store.upsertLandmarkState(gameId, landmarkId, teamId, false);
+  await startChallengeForClaim(gameId, landmarkId, teamId, landmark.challenge ?? null);
+  const team = await store.getTeam(teamId);
+  const fromTeam = existing?.teamId ? await store.getTeam(existing.teamId) : null;
+  await store.addLogEntry(gameId, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
-    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    teamName: team?.name ?? 'Unknown',
     landmarkName: landmark.name,
-    ...(existing?.teamId ? { fromTeamName: store.getTeam(existing.teamId)?.name ?? 'Unknown' } : {}),
+    ...(existing?.teamId ? { fromTeamName: fromTeam?.name ?? 'Unknown' } : {}),
   });
 
-  const teams = store.getTeamsByGame(gameId);
-  const states = store.getLandmarkStates(gameId);
+  const teams = await store.getTeamsByGame(gameId);
+  const states = await store.getLandmarkStates(gameId);
   const scores = computeScoreboard(teams, states);
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
 
-  broadcastState(gameId);
+  await broadcastState(gameId);
 
   if (win.winner) {
-    store.updateGame(gameId, { status: 'ended' });
+    await store.updateGame(gameId, { status: 'ended' });
     cancelGameEnd(gameId);
-    store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
+    await store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     nsp.to(`game:${gameId}`).emit('game_ended', { winnerId: win.winner, scores });
   }
 }
 
-function processChallenge(
+async function processChallenge(
   gameId: string, teamId: string, landmarkId: string,
   outcome: 'complete' | 'fail' | 'pass',
   socket: Socket, nsp: ReturnType<Server['of']>
-): void {
-  const game = getGameOrThrow(gameId);
+): Promise<void> {
+  const game = await getGameOrThrow(gameId);
   if (game.status !== 'active') throw new Error('Game is not active');
-  if (isTeamFrozen(gameId, teamId)) throw new Error('Your team is frozen');
+  if (await isTeamFrozen(gameId, teamId)) throw new Error('Your team is frozen');
 
-  const landmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(gameId)).find((l) => l.id === landmarkId);
   let result;
   if (landmark) {
-    result = resolveChallengeForTeam({
+    result = await resolveChallengeForTeam({
       gameId,
       landmarkId,
       teamId,
@@ -186,16 +188,17 @@ function processChallenge(
     });
   }
 
-  const challengeLandmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
-  store.addLogEntry(gameId, `challenge_${outcome}`, {
+  const challengeLandmark = (await store.getLandmarksByGame(gameId)).find((l) => l.id === landmarkId);
+  const team = await store.getTeam(teamId);
+  await store.addLogEntry(gameId, `challenge_${outcome}`, {
     landmarkId, teamId,
-    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    teamName: team?.name ?? 'Unknown',
     landmarkName: challengeLandmark?.name ?? 'a landmark',
   });
   if (result?.voidedTeams.length) {
     for (const voidedTeamId of result.voidedTeams) {
-      const vt = store.getTeam(voidedTeamId);
-      store.addLogEntry(gameId, 'challenge_voided', {
+      const vt = await store.getTeam(voidedTeamId);
+      await store.addLogEntry(gameId, 'challenge_voided', {
         landmarkId, teamId: voidedTeamId, byTeamId: teamId,
         teamName: vt?.name ?? 'Unknown',
         landmarkName: challengeLandmark?.name ?? 'a landmark',
@@ -203,34 +206,34 @@ function processChallenge(
     }
   }
 
-  const teams = store.getTeamsByGame(gameId);
-  const states = store.getLandmarkStates(gameId);
+  const teams = await store.getTeamsByGame(gameId);
+  const states = await store.getLandmarkStates(gameId);
   const scores = computeScoreboard(teams, states);
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
 
-  broadcastState(gameId);
+  await broadcastState(gameId);
 
   if (win.winner) {
-    store.updateGame(gameId, { status: 'ended' });
+    await store.updateGame(gameId, { status: 'ended' });
     cancelGameEnd(gameId);
-    store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
+    await store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     nsp.to(`game:${gameId}`).emit('game_ended', { winnerId: win.winner, scores });
   }
 }
 
-function processTag(
+async function processTag(
   gameId: string, taggerTeamId: string, targetTeamId: string,
   socket: Socket, nsp: ReturnType<Server['of']>
-): void {
-  const game = getGameOrThrow(gameId);
+): Promise<void> {
+  const game = await getGameOrThrow(gameId);
   if (game.status !== 'active') throw new Error('Game is not active');
   if (taggerTeamId === targetTeamId) throw new Error('Cannot tag yourself');
-  if (isTeamFrozen(gameId, taggerTeamId)) throw new Error('Your team is frozen');
+  if (await isTeamFrozen(gameId, taggerTeamId)) throw new Error('Your team is frozen');
 
   const activeElapsed = getActiveElapsedMs(game.startedAt, game.totalPausedMs, game.pausedAt, game.status);
   if (activeElapsed < game.config.noTagPeriod * 1000) throw new Error(`Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
-  const recentTags = store.getTagsByGame(gameId).filter(
+  const recentTags = (await store.getTagsByGame(gameId)).filter(
     (t) => t.taggerTeamId === taggerTeamId && t.targetTeamId === targetTeamId && !t.voided
   );
   for (const tag of recentTags) {
@@ -238,16 +241,16 @@ function processTag(
     if (elapsed < game.config.reTagCooldown * 1000) throw new Error('Re-tag cooldown active');
   }
 
-  const tag = store.addTagEvent(gameId, taggerTeamId, targetTeamId);
-  const taggerTeam = store.getTeam(taggerTeamId);
-  const targetTeam = store.getTeam(targetTeamId);
-  store.addLogEntry(gameId, 'tag_created', {
+  const tag = await store.addTagEvent(gameId, taggerTeamId, targetTeamId);
+  const taggerTeam = await store.getTeam(taggerTeamId);
+  const targetTeam = await store.getTeam(targetTeamId);
+  await store.addLogEntry(gameId, 'tag_created', {
     taggerTeamId,
     targetTeamId,
     taggerName: taggerTeam?.name ?? 'Unknown',
     targetName: targetTeam?.name ?? 'Unknown',
   });
-  broadcastState(gameId);
+  await broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('team_frozen', {
     teamId: targetTeamId,
     tagTimestamp: tag.timestamp,
@@ -255,61 +258,61 @@ function processTag(
   });
 }
 
-function processDispute(
+async function processDispute(
   gameId: string, teamId: string,
   socket: Socket, nsp: ReturnType<Server['of']>
-): void {
-  const game = getGameOrThrow(gameId);
-  const activeTag = store.getActiveTag(gameId, teamId);
+): Promise<void> {
+  const game = await getGameOrThrow(gameId);
+  const activeTag = await store.getActiveTag(gameId, teamId);
   if (!activeTag) throw new Error('No active tag to dispute');
 
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
   if (elapsed > game.config.disputeWindow * 1000) throw new Error('Dispute window has expired');
 
-  store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
-  const targetTeam = store.getTeam(teamId);
-  const taggerTeam = store.getTeam(activeTag.taggerTeamId);
-  store.addLogEntry(gameId, 'tag_disputed', {
+  await store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
+  const targetTeam = await store.getTeam(teamId);
+  const taggerTeam = await store.getTeam(activeTag.taggerTeamId);
+  await store.addLogEntry(gameId, 'tag_disputed', {
     tagId: activeTag.id,
     targetTeamId: teamId,
     targetName: targetTeam?.name ?? 'Unknown',
     taggerTeamId: activeTag.taggerTeamId,
     taggerName: taggerTeam?.name ?? 'Unknown',
   });
-  broadcastState(gameId);
+  await broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('tag_disputed', { teamId, taggerTeamId: activeTag.taggerTeamId });
 }
 
-function processPause(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): void {
-  const game = getGameOrThrow(gameId);
+async function processPause(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): Promise<void> {
+  const game = await getGameOrThrow(gameId);
   if (game.status !== 'active') throw new Error('Game is not active');
-  store.updateGame(gameId, { status: 'paused', pausedAt: new Date().toISOString() });
+  await store.updateGame(gameId, { status: 'paused', pausedAt: new Date().toISOString() });
   cancelGameEnd(gameId);
-  store.addLogEntry(gameId, 'game_paused', {});
-  broadcastState(gameId);
+  await store.addLogEntry(gameId, 'game_paused', {});
+  await broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_paused', {});
 }
 
-function processResume(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): void {
-  const game = getGameOrThrow(gameId);
+async function processResume(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): Promise<void> {
+  const game = await getGameOrThrow(gameId);
   if (game.status !== 'paused') throw new Error('Game is not paused');
   const pausedMs = game.pausedAt ? Date.now() - new Date(game.pausedAt).getTime() : 0;
-  store.updateGame(gameId, { status: 'active', pausedAt: undefined, totalPausedMs: game.totalPausedMs + pausedMs });
-  scheduleGameEnd(gameId);
-  store.addLogEntry(gameId, 'game_resumed', {});
-  broadcastState(gameId);
+  await store.updateGame(gameId, { status: 'active', pausedAt: undefined, totalPausedMs: game.totalPausedMs + pausedMs });
+  await scheduleGameEnd(gameId);
+  await store.addLogEntry(gameId, 'game_resumed', {});
+  await broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_resumed', {});
 }
 
-function processEnd(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): void {
-  const game = getGameOrThrow(gameId);
-  const teams = store.getTeamsByGame(gameId);
-  const states = store.getLandmarkStates(gameId);
+async function processEnd(gameId: string, socket: Socket, nsp: ReturnType<Server['of']>): Promise<void> {
+  const game = await getGameOrThrow(gameId);
+  const teams = await store.getTeamsByGame(gameId);
+  const states = await store.getLandmarkStates(gameId);
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
-  store.updateGame(gameId, { status: 'ended' });
+  await store.updateGame(gameId, { status: 'ended' });
   cancelGameEnd(gameId);
-  store.addLogEntry(gameId, 'game_ended', result);
-  broadcastState(gameId);
+  await store.addLogEntry(gameId, 'game_ended', result);
+  await broadcastState(gameId);
   nsp.to(`game:${gameId}`).emit('game_ended', { ...result, scores });
 }

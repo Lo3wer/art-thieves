@@ -3,8 +3,10 @@ services:
     build: .
     restart: unless-stopped
     environment:
+      DB_DRIVER: ${DB_DRIVER:-sqlite}
       PERSIST: "true"
       DATABASE_PATH: /data/vat.db
+      DATABASE_URL: ${DATABASE_URL:-}
     volumes:
       - ./data:/data
       - ./uploads:/app/uploads

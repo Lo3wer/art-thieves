@@ -20,35 +20,35 @@ function cloneState(state: any): any {
   return JSON.parse(JSON.stringify(state));
 }
 
-export function buildRoomState(gameId: string, viewerTeamId?: string): any {
-  const game = store.getGame(gameId);
+export async function buildRoomState(gameId: string, viewerTeamId?: string): Promise<any> {
+  const game = await store.getGame(gameId);
   if (!game) return null;
   return {
     ...game,
-    teams: store.getTeamsByGame(gameId),
-    landmarks: store.getLandmarksByGame(gameId),
-    landmarkStates: decorateLandmarkStates(gameId),
-    penalties: store.getPenaltiesByGame(gameId),
-    frozenTeams: getFrozenTeams(gameId),
-    locations: getLatestTeamLocations(gameId, viewerTeamId),
+    teams: await store.getTeamsByGame(gameId),
+    landmarks: await store.getLandmarksByGame(gameId),
+    landmarkStates: await decorateLandmarkStates(gameId),
+    penalties: await store.getPenaltiesByGame(gameId),
+    frozenTeams: await getFrozenTeams(gameId),
+    locations: await getLatestTeamLocations(gameId, viewerTeamId),
   };
 }
 
-function getLatestTeamLocations(gameId: string, viewerTeamId?: string): any[] {
-  const pings = store.getLocationPings(gameId);
+async function getLatestTeamLocations(gameId: string, viewerTeamId?: string): Promise<any[]> {
+  const pings = await store.getLocationPings(gameId);
   const latest = new Map<string, any>();
   for (const p of pings) latest.set(p.teamId, p);
   let list = [...latest.values()];
   // A team with an in-progress challenge cannot see rival locations (anti-scouting rule)
-  if (viewerTeamId && hasActiveChallenge(gameId, viewerTeamId)) {
+  if (viewerTeamId && await hasActiveChallenge(gameId, viewerTeamId)) {
     list = list.filter((l) => l.teamId === viewerTeamId);
   }
   return list;
 }
 
-function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | null {
+async function room(gameId: string): Promise<{ nsp: ReturnType<Server['of']>; state: any } | null> {
   if (!io) return null;
-  const state = buildRoomState(gameId);
+  const state = await buildRoomState(gameId);
   if (!state) return null;
   return {
     nsp: io.of('/game'),
@@ -56,15 +56,15 @@ function room(gameId: string): { nsp: ReturnType<Server['of']>; state: any } | n
   };
 }
 
-export function sendFullState(gameId: string): void {
-  const r = room(gameId);
+export async function sendFullState(gameId: string): Promise<void> {
+  const r = await room(gameId);
   if (!r) return;
   lastSnapshots[gameId] = { game: cloneState(r.state) };
   r.nsp.to(`game:${gameId}`).emit('state_update', { game: r.state });
 }
 
-export function seedSnapshot(gameId: string): void {
-  const r = room(gameId);
+export async function seedSnapshot(gameId: string): Promise<void> {
+  const r = await room(gameId);
   if (r) lastSnapshots[gameId] = { game: cloneState(r.state) };
 }
 
@@ -89,21 +89,21 @@ function diffLandmarkStates(prev: any[] | undefined, curr: any[] | undefined): a
   return changed;
 }
 
-export function broadcastState(gameId: string): void {
-  const r = room(gameId);
+export async function broadcastState(gameId: string): Promise<void> {
+  const r = await room(gameId);
   if (!r) return;
   const region = r.state;
   const prev = lastSnapshots[gameId]?.game;
 
   // Push newest log entry as a discrete realtime event (drives the Log screen).
-  const newest = store.getLog(gameId)[0];
+  const newest = (await store.getLog(gameId))[0];
   if (newest && lastLogSent[gameId] !== newest.id) {
     lastLogSent[gameId] = newest.id;
     r.nsp.to(`game:${gameId}`).emit('log_entry', newest);
   }
 
   if (!prev) {
-    sendFullState(gameId);
+    await sendFullState(gameId);
     return;
   }
 

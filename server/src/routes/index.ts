@@ -28,8 +28,8 @@ function p(v: string | string[] | undefined): string {
 }
 
 // Maps
-router.get('/maps', (_req, res) => {
-  const maps = store.getMaps().map((m) => {
+router.get('/maps', async (_req, res) => {
+  const maps = (await store.getMaps()).map((m) => {
     const features = (m.data as any)?.features ?? [];
     return {
       id: m.id,
@@ -45,33 +45,33 @@ router.get('/maps', (_req, res) => {
   res.json(maps);
 });
 
-router.get('/maps/:id', (req, res) => {
-  const map = store.getMap(p(req.params.id));
+router.get('/maps/:id', async (req, res) => {
+  const map = await store.getMap(p(req.params.id));
   if (!map) throw new AppError(404, 'Map not found');
   const { centerLat, centerLng, ...rest } = map;
   res.json({ ...rest, center: { lat: centerLat, lng: centerLng } });
 });
 
 // Games
-router.get('/games/:id', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const gameTeams = store.getTeamsByGame(game.id);
-  const gameLandmarks = store.getLandmarksByGame(game.id);
+  const gameTeams = await store.getTeamsByGame(game.id);
+  const gameLandmarks = await store.getLandmarksByGame(game.id);
   res.json({
     ...game,
     teams: gameTeams,
     landmarks: gameLandmarks,
-    landmarkStates: decorateLandmarkStates(game.id),
-    penalties: store.getPenaltiesByGame(game.id),
+    landmarkStates: await decorateLandmarkStates(game.id),
+    penalties: await store.getPenaltiesByGame(game.id),
   });
 });
 
-router.post('/games', validate(createGameSchema), (req, res) => {
+router.post('/games', validate(createGameSchema), async (req, res) => {
   const { mapId, config } = req.body;
-  const map = store.getMap(mapId);
+  const map = await store.getMap(mapId);
   if (!map) throw new AppError(404, 'Map not found');
-  const game = store.createGame(mapId, config);
+  const game = await store.createGame(mapId, config);
   const landmarkData = (map.data as any).features
     ?.filter((f: any) => f.properties?.type === 'landmark')
     .map((f: any, i: number) => ({
@@ -84,221 +84,223 @@ router.post('/games', validate(createGameSchema), (req, res) => {
       mapLandmarkIndex: i,
     }));
   if (landmarkData) {
-    store.addLandmarks(game.id, landmarkData);
+    await store.addLandmarks(game.id, landmarkData);
   }
-  store.addLogEntry(game.id, 'game_created', { mapName: map.name });
+  await store.addLogEntry(game.id, 'game_created', { mapName: map.name });
   res.status(201).json({
     ...game,
     teams: [],
-    landmarks: store.getLandmarksByGame(game.id),
+    landmarks: await store.getLandmarksByGame(game.id),
     landmarkStates: [],
     penalties: [],
   });
 });
 
-router.get('/games/lookup/:joinCode', (req, res) => {
-  const game = store.getGameByJoinCode(p(req.params.joinCode));
+router.get('/games/lookup/:joinCode', async (req, res) => {
+  const game = await store.getGameByJoinCode(p(req.params.joinCode));
   if (!game) throw new AppError(404, 'Game not found');
   res.json({
     id: game.id,
     status: game.status,
-    teams: store.getTeamsByGame(game.id).map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    teams: (await store.getTeamsByGame(game.id)).map((t) => ({ id: t.id, name: t.name, color: t.color })),
   });
 });
 
-router.post('/games/join/:joinCode', validate(joinGameSchema), (req, res) => {
-  const game = store.getGameByJoinCode(p(req.params.joinCode));
+router.post('/games/join/:joinCode', validate(joinGameSchema), async (req, res) => {
+  const game = await store.getGameByJoinCode(p(req.params.joinCode));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'lobby') throw new AppError(400, 'Game already started');
   try {
-    const wasEmpty = store.getTeamsByGame(game.id).length === 0;
-    const team = store.addTeam(game.id, req.body.name, req.body.color);
+    const wasEmpty = (await store.getTeamsByGame(game.id)).length === 0;
+    const team = await store.addTeam(game.id, req.body.name, req.body.color);
     if (wasEmpty) {
-      store.updateGame(game.id, { hostTeamId: team.id });
+      await store.updateGame(game.id, { hostTeamId: team.id });
     }
-    const freshGame = store.getGame(game.id)!;
-    store.addLogEntry(game.id, 'team_joined', { teamId: team.id, teamName: team.name });
+    const freshGame = (await store.getGame(game.id))!;
+    await store.addLogEntry(game.id, 'team_joined', { teamId: team.id, teamName: team.name });
     res.status(201).json({
       game: {
         ...freshGame,
-        teams: store.getTeamsByGame(game.id),
-        landmarks: store.getLandmarksByGame(game.id),
-        landmarkStates: decorateLandmarkStates(game.id),
-        penalties: store.getPenaltiesByGame(game.id),
+        teams: await store.getTeamsByGame(game.id),
+        landmarks: await store.getLandmarksByGame(game.id),
+        landmarkStates: await decorateLandmarkStates(game.id),
+        penalties: await store.getPenaltiesByGame(game.id),
       },
       team,
     });
   } catch (err: any) {
-    const existing = store.getTeamsByGame(game.id).map((t) => ({ name: t.name, color: t.color }));
+    const existing = (await store.getTeamsByGame(game.id)).map((t) => ({ name: t.name, color: t.color }));
     throw new AppError(409, err.message, { existing });
   }
 });
 
-router.post('/games/:id/rejoin', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/rejoin', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const teamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
-  const team = store.getTeam(teamId);
+  const team = await store.getTeam(teamId);
   if (!team || team.gameId !== game.id) throw new AppError(400, 'Invalid team for this game');
   res.json({
     game: {
       ...game,
-      teams: store.getTeamsByGame(game.id),
-      landmarks: store.getLandmarksByGame(game.id),
-      landmarkStates: decorateLandmarkStates(game.id),
-      penalties: store.getPenaltiesByGame(game.id),
+        teams: await store.getTeamsByGame(game.id),
+        landmarks: await store.getLandmarksByGame(game.id),
+        landmarkStates: await decorateLandmarkStates(game.id),
+        penalties: await store.getPenaltiesByGame(game.id),
     },
     team,
     isHost: game.hostTeamId === team.id,
   });
 });
 
-router.post('/games/:id/kick', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/kick', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const targetTeamId = typeof req.body?.teamId === 'string' ? req.body.teamId : '';
   const hostTeamId = typeof req.body?.hostTeamId === 'string' ? req.body.hostTeamId : '';
   if (game.hostTeamId && hostTeamId && hostTeamId !== game.hostTeamId) {
     throw new AppError(403, 'Only the host can kick players');
   }
-  const target = store.getTeam(targetTeamId);
+  const target = await store.getTeam(targetTeamId);
   if (!target || target.gameId !== game.id) throw new AppError(404, 'Team not found');
   broadcastToGame(game.id, 'team_kicked', { teamId: targetTeamId });
-  store.addLogEntry(game.id, 'team_kicked', { teamId: targetTeamId, teamName: target.name });
+  await store.addLogEntry(game.id, 'team_kicked', { teamId: targetTeamId, teamName: target.name });
   res.json({ ok: true });
 });
 
-router.post('/games/:id/start', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/start', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const updated = store.updateGame(game.id, {
+  const updated = await store.updateGame(game.id, {
     status: 'active',
     startedAt: new Date().toISOString(),
   });
-  store.addLogEntry(game.id, 'game_started', {});
-  scheduleGameEnd(game.id);
-  broadcastState(game.id);
+  await store.addLogEntry(game.id, 'game_started', {});
+  await scheduleGameEnd(game.id);
+  await broadcastState(game.id);
   res.json(updated);
 });
 
-router.put('/games/:id/config', validate(configUpdateSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/config', validate(configUpdateSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const updated = store.updateGame(game.id, {
+  const updated = await store.updateGame(game.id, {
     config: { ...game.config, ...req.body },
   });
   res.json(updated);
 });
 
-router.put('/games/:id/pause', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/pause', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
-  store.updateGame(game.id, { status: 'paused', pausedAt: new Date().toISOString() });
+  await store.updateGame(game.id, { status: 'paused', pausedAt: new Date().toISOString() });
   cancelGameEnd(game.id);
-  store.addLogEntry(game.id, 'game_paused', {});
+  await store.addLogEntry(game.id, 'game_paused', {});
   broadcastToGame(game.id, 'game_paused', {});
-  broadcastState(game.id);
+  await broadcastState(game.id);
   res.json({ status: 'paused' });
 });
 
-router.put('/games/:id/resume', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/resume', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'paused') throw new AppError(400, 'Game is not paused');
   const pausedMs = game.pausedAt ? Date.now() - new Date(game.pausedAt).getTime() : 0;
-  store.updateGame(game.id, {
+  await store.updateGame(game.id, {
     status: 'active',
     pausedAt: undefined,
     totalPausedMs: game.totalPausedMs + pausedMs,
   });
-  store.addLogEntry(game.id, 'game_resumed', {});
-  scheduleGameEnd(game.id);
+  await store.addLogEntry(game.id, 'game_resumed', {});
+  await scheduleGameEnd(game.id);
   broadcastToGame(game.id, 'game_resumed', {});
-  broadcastState(game.id);
+  await broadcastState(game.id);
   res.json({ status: 'active' });
 });
 
-router.put('/games/:id/end', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/end', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const teams = store.getTeamsByGame(game.id);
-  const states = store.getLandmarkStates(game.id);
+  const teams = await store.getTeamsByGame(game.id);
+  const states = await store.getLandmarkStates(game.id);
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
-  store.updateGame(game.id, { status: 'ended' });
+  await store.updateGame(game.id, { status: 'ended' });
   cancelGameEnd(game.id);
-  store.addLogEntry(game.id, 'game_ended', result);
+  await store.addLogEntry(game.id, 'game_ended', result);
   broadcastToGame(game.id, 'game_ended', { ...result, scores });
-  broadcastState(game.id);
+  await broadcastState(game.id);
   res.json({ ...result, scores });
 });
 
-function checkWinAndEnd(gameId: string): void {
-  const game = store.getGame(gameId);
+async function checkWinAndEnd(gameId: string): Promise<void> {
+  const game = await store.getGame(gameId);
   if (!game) return;
-  const teams = store.getTeamsByGame(gameId);
-  const states = store.getLandmarkStates(gameId);
+  const teams = await store.getTeamsByGame(gameId);
+  const states = await store.getLandmarkStates(gameId);
   const scores = computeScoreboard(teams, states);
   const win = checkWinCondition(scores.map((s) => ({ teamId: s.teamId, claimed: s.claimed })), game.config.winThreshold);
   if (win.winner) {
-    store.updateGame(gameId, { status: 'ended' });
+    await store.updateGame(gameId, { status: 'ended' });
     cancelGameEnd(gameId);
-    store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
+    await store.addLogEntry(gameId, 'game_ended', { winnerId: win.winner });
     broadcastToGame(gameId, 'game_ended', win);
   }
 }
 
 // Claim & challenge
-router.post('/games/:id/claim', validate(claimSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/claim', validate(claimSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
   const { landmarkId, teamId, latitude, longitude } = req.body;
   if (!teamId) throw new AppError(400, 'teamId is required');
-  if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
+  if (await isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
-  const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(game.id)).find((l) => l.id === landmarkId);
   if (!landmark) throw new AppError(404, 'Landmark not found');
   if (!isWithinVicinity(latitude, longitude, landmark.latitude, landmark.longitude, game.config.vicinityRadius)) {
     throw new AppError(400, 'Too far from landmark');
   }
 
-  const existing = store.getLandmarkStates(game.id).find((s) => s.landmarkId === landmarkId);
+  const existing = (await store.getLandmarkStates(game.id)).find((s) => s.landmarkId === landmarkId);
   if (existing?.locked) throw new AppError(400, 'Landmark is locked');
   if (existing?.teamId === teamId) throw new AppError(400, 'Already claimed by your team');
 
   const isSteal = existing?.teamId != null && existing.teamId !== teamId;
   let photo: { id: string; url: string } | null = null;
   if (req.body.photoId) {
-    const p = store.getPhoto(req.body.photoId);
+    const p = await store.getPhoto(req.body.photoId);
     if (p?.gameId !== game.id) throw new AppError(400, 'Invalid photo for this game');
     photo = { id: p.id, url: p.url };
   }
-  store.upsertLandmarkState(game.id, landmarkId, teamId, false, photo?.id);
-  startChallengeForClaim(game.id, landmarkId, teamId, landmark.challenge ?? null);
-  store.addLogEntry(game.id, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
+  await store.upsertLandmarkState(game.id, landmarkId, teamId, false, photo?.id);
+  await startChallengeForClaim(game.id, landmarkId, teamId, landmark.challenge ?? null);
+  const team = await store.getTeam(teamId);
+  const fromTeam = existing?.teamId ? await store.getTeam(existing.teamId) : null;
+  await store.addLogEntry(game.id, isSteal ? 'landmark_stolen' : 'landmark_claimed', {
     landmarkId, teamId, fromTeamId: existing?.teamId,
-    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    teamName: team?.name ?? 'Unknown',
     landmarkName: landmark.name,
-    ...(existing?.teamId ? { fromTeamName: store.getTeam(existing.teamId)?.name ?? 'Unknown' } : {}),
+    ...(existing?.teamId ? { fromTeamName: fromTeam?.name ?? 'Unknown' } : {}),
     latitude, longitude,
     ...(photo ? { photoId: photo.id, photoUrl: photo.url } : {}),
   });
-  checkWinAndEnd(game.id);
-  broadcastState(game.id);
-  const state = store.getLandmarkStates(game.id).find((s) => s.landmarkId === landmarkId);
+  await checkWinAndEnd(game.id);
+  await broadcastState(game.id);
+  const state = (await store.getLandmarkStates(game.id)).find((s) => s.landmarkId === landmarkId);
   res.json(state);
 });
 
-router.post('/games/:id/challenge', validate(challengeSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/challenge', validate(challengeSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
   const { landmarkId, outcome, teamId, photoId } = req.body;
-  if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
+  if (await isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
-  const result = resolveChallengeForTeam({
+  const result = await resolveChallengeForTeam({
     gameId: game.id,
     landmarkId,
     teamId,
@@ -308,22 +310,23 @@ router.post('/games/:id/challenge', validate(challengeSchema), (req, res) => {
     photoId,
   });
 
-  const challengeLandmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
-  store.addLogEntry(game.id, `challenge_${outcome}`, {
+  const challengeLandmark = (await store.getLandmarksByGame(game.id)).find((l) => l.id === landmarkId);
+  const team = await store.getTeam(teamId);
+  await store.addLogEntry(game.id, `challenge_${outcome}`, {
     landmarkId, teamId,
-    teamName: store.getTeam(teamId)?.name ?? 'Unknown',
+    teamName: team?.name ?? 'Unknown',
     landmarkName: challengeLandmark?.name ?? 'a landmark',
   });
   for (const voidedTeamId of result.voidedTeams) {
-    const vt = store.getTeam(voidedTeamId);
-    store.addLogEntry(game.id, 'challenge_voided', {
+    const vt = await store.getTeam(voidedTeamId);
+    await store.addLogEntry(game.id, 'challenge_voided', {
       landmarkId, teamId: voidedTeamId, byTeamId: teamId,
       teamName: vt?.name ?? 'Unknown',
       landmarkName: challengeLandmark?.name ?? 'a landmark',
     });
   }
-  checkWinAndEnd(game.id);
-  broadcastState(game.id);
+  await checkWinAndEnd(game.id);
+  await broadcastState(game.id);
   res.json({
     outcome,
     penaltyUntil: result.penaltyUntil ?? null,
@@ -332,18 +335,18 @@ router.post('/games/:id/challenge', validate(challengeSchema), (req, res) => {
 });
 
 // Tag
-router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/tag', validate(tagSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   if (game.status !== 'active') throw new AppError(400, 'Game is not active');
   const { targetTeamId, teamId } = req.body;
   if (teamId === targetTeamId) throw new AppError(400, 'Cannot tag yourself');
-  if (isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
+  if (await isTeamFrozen(game.id, teamId)) throw new AppError(400, 'Your team is frozen');
 
   const activeElapsed = getActiveElapsedMs(game.startedAt, game.totalPausedMs, game.pausedAt, game.status);
   if (activeElapsed < game.config.noTagPeriod * 1000) throw new AppError(400, `Tagging is disabled for the first ${game.config.noTagPeriod} seconds`);
 
-  const recentTags = store.getTagsByGame(game.id).filter(
+  const recentTags = (await store.getTagsByGame(game.id)).filter(
     (t) => t.taggerTeamId === teamId && t.targetTeamId === targetTeamId && !t.voided
   );
   for (const tag of recentTags) {
@@ -351,10 +354,10 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
     if (elapsed < game.config.reTagCooldown * 1000) throw new AppError(400, 'Re-tag cooldown active');
   }
 
-  const tag = store.addTagEvent(game.id, teamId, targetTeamId);
-  const taggerTeam = store.getTeam(teamId);
-  const targetTeam = store.getTeam(targetTeamId);
-  store.addLogEntry(game.id, 'tag_created', {
+  const tag = await store.addTagEvent(game.id, teamId, targetTeamId);
+  const taggerTeam = await store.getTeam(teamId);
+  const targetTeam = await store.getTeam(targetTeamId);
+  await store.addLogEntry(game.id, 'tag_created', {
     taggerTeamId: teamId,
     targetTeamId,
     taggerName: taggerTeam?.name ?? 'Unknown',
@@ -365,23 +368,23 @@ router.post('/games/:id/tag', validate(tagSchema), (req, res) => {
     tagTimestamp: tag.timestamp,
     frozenUntil: getFrozenUntil(tag.timestamp),
   });
-  broadcastState(game.id);
+  await broadcastState(game.id);
   res.status(201).json(tag);
 });
 
-router.post('/games/:id/dispute', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/dispute', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const { teamId } = req.body;
   if (!teamId) throw new AppError(400, 'teamId is required');
-  const activeTag = store.getActiveTag(game.id, teamId);
+  const activeTag = await store.getActiveTag(game.id, teamId);
   if (!activeTag) throw new AppError(404, 'No active tag to dispute');
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
   if (elapsed > game.config.disputeWindow * 1000) throw new AppError(400, 'Dispute window has expired');
-  store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
-  const targetTeam = store.getTeam(teamId);
-  const taggerTeam = store.getTeam(activeTag.taggerTeamId);
-  store.addLogEntry(game.id, 'tag_disputed', {
+  await store.updateTagEvent(activeTag.id, { disputed: true, voided: true });
+  const targetTeam = await store.getTeam(teamId);
+  const taggerTeam = await store.getTeam(activeTag.taggerTeamId);
+  await store.addLogEntry(game.id, 'tag_disputed', {
     tagId: activeTag.id,
     targetTeamId: teamId,
     targetName: targetTeam?.name ?? 'Unknown',
@@ -389,26 +392,26 @@ router.post('/games/:id/dispute', (req, res) => {
     taggerName: taggerTeam?.name ?? 'Unknown',
   });
   broadcastToGame(game.id, 'tag_disputed', { teamId, taggerTeamId: activeTag.taggerTeamId });
-  broadcastState(game.id);
+  await broadcastState(game.id);
   res.json({ voided: true });
 });
 
 // Push tokens
-router.post('/games/:id/push-token', validate(pushTokenSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.post('/games/:id/push-token', validate(pushTokenSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  store.addPushToken(game.id, req.body.teamId ?? '', req.body.token);
+  await store.addPushToken(game.id, req.body.teamId ?? '', req.body.token);
   res.status(201).json({ registered: true });
 });
 
 // Summary (post-game)
-router.get('/games/:id/summary', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/summary', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const teams = store.getTeamsByGame(game.id);
-  const states = store.getLandmarkStates(game.id);
-  const landmarks = store.getLandmarksByGame(game.id);
-  const tags = store.getTagsByGame(game.id);
+  const teams = await store.getTeamsByGame(game.id);
+  const states = await store.getLandmarkStates(game.id);
+  const landmarks = await store.getLandmarksByGame(game.id);
+  const tags = await store.getTagsByGame(game.id);
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
 
@@ -421,9 +424,9 @@ router.get('/games/:id/summary', (req, res) => {
     received: tags.filter((x) => x.targetTeamId === t.id && !x.voided).length,
   }));
 
-  const landmarkDetails = landmarks.map((l) => {
+  const landmarkDetails = await Promise.all(landmarks.map(async (l) => {
     const st = states.find((s) => s.landmarkId === l.id);
-    const session = st?.teamId ? store.getChallengeSession(game.id, l.id, st.teamId) : null;
+    const session = st?.teamId ? await store.getChallengeSession(game.id, l.id, st.teamId) : null;
     return {
       id: l.id,
       name: l.name,
@@ -436,7 +439,7 @@ router.get('/games/:id/summary', (req, res) => {
         ? { outcome: session.outcome, teamId: session.teamId, createdAt: session.completedAt ?? session.startedAt }
         : null,
     };
-  });
+  }));
 
   res.json({
     winner: {
@@ -452,26 +455,26 @@ router.get('/games/:id/summary', (req, res) => {
 });
 
 // Scoreboard & log
-router.get('/games/:id/scoreboard', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/scoreboard', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const teams = store.getTeamsByGame(game.id);
-  const states = store.getLandmarkStates(game.id);
+  const teams = await store.getTeamsByGame(game.id);
+  const states = await store.getLandmarkStates(game.id);
   const scores = computeScoreboard(teams, states);
   res.json(scores);
 });
 
-router.get('/games/:id/frozen-teams', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/frozen-teams', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  res.json(getFrozenTeams(game.id));
+  res.json(await getFrozenTeams(game.id));
 });
 
-router.get('/games/:id/log', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/log', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const teamId = req.query.teamId as string | undefined;
-  const entries = store.getLog(game.id, teamId);
+  const entries = await store.getLog(game.id, teamId);
   res.json(entries);
 });
 
@@ -480,15 +483,15 @@ router.post(
   '/games/:id/photos',
   photoUpload.single('photo'),
   validate(photoMetadataSchema),
-  (req, res) => {
-    const game = store.getGame(p(req.params.id));
+  async (req, res) => {
+    const game = await store.getGame(p(req.params.id));
     if (!game) throw new AppError(404, 'Game not found');
     if (!req.file) throw new AppError(400, 'No file uploaded');
     const { teamId, landmarkId, latitude, longitude } = req.body;
-    const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+    const landmark = (await store.getLandmarksByGame(game.id)).find((l) => l.id === landmarkId);
     if (!landmark) throw new AppError(404, 'Landmark not found');
     const url = `/uploads/${game.id}/${req.file.filename}`;
-    const photo = store.addPhoto({
+    const photo = await store.addPhoto({
       gameId: game.id,
       teamId,
       landmarkId,
@@ -501,29 +504,29 @@ router.post(
   }
 );
 
-router.get('/games/:id/photos', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/photos', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  res.json(store.getPhotosByGame(game.id));
+  res.json(await store.getPhotosByGame(game.id));
 });
 
 // Locations (post-game route replay)
-router.get('/games/:id/locations', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/locations', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  res.json(store.getLocationPings(game.id));
+  res.json(await store.getLocationPings(game.id));
 });
 
 // Timeline (for post-game reconstruction tooling)
-router.get('/games/:id/timeline', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/timeline', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
-  const teams = store.getTeamsByGame(game.id);
-  const states = store.getLandmarkStates(game.id);
+  const teams = await store.getTeamsByGame(game.id);
+  const states = await store.getLandmarkStates(game.id);
   const scores = computeScoreboard(teams, states);
   const result = computeWinner(scores);
 
-  const log = store.getLog(game.id);
+  const log = await store.getLog(game.id);
   const events = [...log]
     .reverse()
     .map((entry) => {
@@ -540,12 +543,12 @@ router.get('/games/:id/timeline', (req, res) => {
       };
     });
 
-  const landmarks = store.getLandmarksByGame(game.id);
+  const landmarks = await store.getLandmarksByGame(game.id);
   const stateByLandmark = new Map(states.map((s) => [s.landmarkId, s]));
   const teamById = new Map(teams.map((t) => [t.id, t]));
   const landmarkById = new Map(landmarks.map((l) => [l.id, l]));
 
-  const photos = store.getPhotosByGame(game.id).map((p) => {
+  const photos = (await store.getPhotosByGame(game.id)).map((p) => {
     const team = teamById.get(p.teamId);
     const landmark = landmarkById.get(p.landmarkId);
     return {
@@ -586,7 +589,7 @@ router.get('/games/:id/timeline', (req, res) => {
       };
     }),
     photos,
-    locations: store.getLocationPings(game.id).map((l) => ({
+    locations: (await store.getLocationPings(game.id)).map((l) => ({
       teamId: l.teamId,
       latitude: l.latitude,
       longitude: l.longitude,
@@ -598,14 +601,14 @@ router.get('/games/:id/timeline', (req, res) => {
 
 // Per-team challenge attempts (lets a team see its own past attempts on
 // landmarks it no longer holds; landmarkStates only embeds the holder's view)
-router.get('/games/:id/challenge-attempts', (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.get('/games/:id/challenge-attempts', async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const teamId = req.query.teamId as string | undefined;
   if (!teamId) throw new AppError(400, 'teamId query parameter is required');
-  const team = store.getTeam(teamId);
+  const team = await store.getTeam(teamId);
   if (!team || team.gameId !== game.id) throw new AppError(404, 'Team not found');
-  const attempts = store.getChallengeSessionsByGame(game.id)
+  const attempts = (await store.getChallengeSessionsByGame(game.id))
     .filter((a) => a.teamId === teamId)
     .map((a) => ({
       landmarkId: a.landmarkId,
@@ -618,30 +621,30 @@ router.get('/games/:id/challenge-attempts', (req, res) => {
 });
 
 // Host debug controls: repair landmark state when something goes wrong mid-game.
-function assertHost(game: NonNullable<ReturnType<typeof store.getGame>>, teamId: string): void {
+function assertHost(game: NonNullable<Awaited<ReturnType<typeof store.getGame>>>, teamId: string): void {
   if (!game.hostTeamId || teamId !== game.hostTeamId) {
     throw new AppError(403, 'Only the host can use debug controls');
   }
 }
 
-router.put('/games/:id/debug/landmark-state', validate(debugLandmarkStateSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/debug/landmark-state', validate(debugLandmarkStateSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const { teamId, landmarkId, holderTeamId, locked } = req.body;
   assertHost(game, teamId);
 
-  const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(game.id)).find((l) => l.id === landmarkId);
   if (!landmark) throw new AppError(404, 'Landmark not found');
 
   if (holderTeamId) {
-    const holder = store.getTeam(holderTeamId);
+    const holder = await store.getTeam(holderTeamId);
     if (!holder || holder.gameId !== game.id) throw new AppError(404, 'Team not found');
-    store.upsertLandmarkState(game.id, landmarkId, holderTeamId, locked);
+    await store.upsertLandmarkState(game.id, landmarkId, holderTeamId, locked);
   } else {
-    store.clearLandmarkState(game.id, landmarkId);
+    await store.clearLandmarkState(game.id, landmarkId);
   }
 
-  store.addLogEntry(game.id, 'debug_adjusted', {
+  await store.addLogEntry(game.id, 'debug_adjusted', {
     kind: 'landmark-state',
     landmarkId,
     landmarkName: landmark.name,
@@ -649,27 +652,27 @@ router.put('/games/:id/debug/landmark-state', validate(debugLandmarkStateSchema)
     locked,
     hostTeamId: teamId,
   });
-  broadcastState(game.id);
-  res.json({ ok: true, landmarkStates: decorateLandmarkStates(game.id) });
+  await broadcastState(game.id);
+  res.json({ ok: true, landmarkStates: await decorateLandmarkStates(game.id) });
 });
 
-router.put('/games/:id/debug/challenge-attempt', validate(debugChallengeAttemptSchema), (req, res) => {
-  const game = store.getGame(p(req.params.id));
+router.put('/games/:id/debug/challenge-attempt', validate(debugChallengeAttemptSchema), async (req, res) => {
+  const game = await store.getGame(p(req.params.id));
   if (!game) throw new AppError(404, 'Game not found');
   const { teamId, landmarkId, targetTeamId, action } = req.body;
   assertHost(game, teamId);
 
-  const landmark = store.getLandmarksByGame(game.id).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(game.id)).find((l) => l.id === landmarkId);
   if (!landmark) throw new AppError(404, 'Landmark not found');
-  const target = store.getTeam(targetTeamId);
+  const target = await store.getTeam(targetTeamId);
   if (!target || target.gameId !== game.id) throw new AppError(404, 'Team not found');
 
-  store.deleteChallengeSession(game.id, landmarkId, targetTeamId);
+  await store.deleteChallengeSession(game.id, landmarkId, targetTeamId);
   if (action === 'set-pending') {
-    store.startChallengeSession(game.id, landmarkId, targetTeamId);
+    await store.startChallengeSession(game.id, landmarkId, targetTeamId);
   }
 
-  store.addLogEntry(game.id, 'debug_adjusted', {
+  await store.addLogEntry(game.id, 'debug_adjusted', {
     kind: 'challenge-attempt',
     action,
     landmarkId,
@@ -678,8 +681,8 @@ router.put('/games/:id/debug/challenge-attempt', validate(debugChallengeAttemptS
     targetTeamName: target.name,
     hostTeamId: teamId,
   });
-  broadcastState(game.id);
-  res.json({ ok: true, challenge: store.getChallengeSession(game.id, landmarkId, targetTeamId) });
+  await broadcastState(game.id);
+  res.json({ ok: true, challenge: await store.getChallengeSession(game.id, landmarkId, targetTeamId) });
 });
 
 export default router;

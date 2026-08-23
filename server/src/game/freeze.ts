@@ -7,18 +7,18 @@ export function getFrozenUntil(from: string | number | Date = new Date()): strin
   return new Date(t + FREEZE_DURATION_MS).toISOString();
 }
 
-export function isTeamFrozen(gameId: string, teamId: string): boolean {
-  const activeTag = store.getActiveTag(gameId, teamId);
+export async function isTeamFrozen(gameId: string, teamId: string): Promise<boolean> {
+  const activeTag = await store.getActiveTag(gameId, teamId);
   if (!activeTag) return false;
   const elapsed = Date.now() - new Date(activeTag.timestamp).getTime();
   return elapsed < FREEZE_DURATION_MS;
 }
 
-export function getFrozenTeams(gameId: string): { teamId: string; frozenUntil: string }[] {
-  const teams = store.getTeamsByGame(gameId);
+export async function getFrozenTeams(gameId: string): Promise<{ teamId: string; frozenUntil: string }[]> {
+  const teams = await store.getTeamsByGame(gameId);
   const frozen: { teamId: string; frozenUntil: string }[] = [];
   for (const team of teams) {
-    const tag = store.getActiveTag(gameId, team.id);
+    const tag = await store.getActiveTag(gameId, team.id);
     if (!tag) continue;
     const elapsed = Date.now() - new Date(tag.timestamp).getTime();
     if (elapsed < FREEZE_DURATION_MS) {

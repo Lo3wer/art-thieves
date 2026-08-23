@@ -59,7 +59,7 @@ npx expo run:android --device
 
 ## Architecture
 
-- `server/` — Express + Socket.IO backend with in-memory data store
+- `server/` — Express + Socket.IO backend with selectable memory, SQLite, or PostgreSQL storage
 - `app/` — Expo React Native app with Zustand stores, MapLibre maps, and Socket.IO client
 
 ### Physical device
@@ -74,11 +74,40 @@ npx expo run:android --device
 ## Configuration
 
 All environment variables for the **app** (`app/.env`) and the **server** (`server/.env`)
-are documented in **[ENV.md](ENV.md)** — including persistence mode (`PERSIST`), the database
-path, the API base URL, and the map style. Templates with every option live in
+are documented in **[ENV.md](ENV.md)** — including the storage driver, database connection
+settings, the API base URL, and the map style. Templates with every option live in
 `app/.env.example` and `server/.env.example`.
 
 Game settings (duration, vicinity radius, no-tag grace period, etc.) are configurable by the host when creating a game.
+
+### Database backends
+
+The server selects its storage backend at startup with `DB_DRIVER`:
+
+```env
+# Local persistent development (default)
+DB_DRIVER=sqlite
+DATABASE_PATH=./data/vat.db
+
+# Azure or another managed PostgreSQL service
+DB_DRIVER=postgres
+DATABASE_URL=postgresql://user:password@host:5432/art_thieves
+
+# Ephemeral development/testing
+DB_DRIVER=memory
+```
+
+PostgreSQL uses the migrations in `server/drizzle-postgres/`. Existing SQLite data is not copied automatically; export and import it before switching a production deployment. Uploaded photos remain filesystem data and should use durable storage such as Azure Files or Blob Storage in production.
+
+To copy an existing SQLite database into a migrated PostgreSQL database, set both
+`DATABASE_PATH` and `DATABASE_URL`, then run:
+
+```sh
+cd server
+npm run db:migrate:sqlite-to-postgres
+```
+
+The command copies database records only. Copy the corresponding `uploads/` files separately.
 
 ## Self-host the server (Docker)
 
@@ -96,18 +125,22 @@ docker run -d --name art-thieves \
   ghcr.io/lo3wer/vancouver-art-thieves-server:latest
 ```
 
-The server listens on `http://<host>:3001`. On first start it creates the SQLite database,
-runs migrations, and seeds a default map. The database lives in the `art-thieves-data`
-volume and uploaded photos in `art-thieves-uploads` — both survive restarts and upgrades.
+The server listens on `http://<host>:3001`. With the default SQLite driver, it creates the
+database, runs migrations, and seeds a default map. The database lives in the
+`art-thieves-data` volume and uploaded photos in `art-thieves-uploads` — both survive
+restarts and upgrades.
 
 ### Environment variables
 
 | Variable         | Default           | Purpose                                        |
 | ---------------- | ----------------- | ---------------------------------------------- |
 | `PORT`           | `3001`            | HTTP/Socket.IO listen port                     |
-| `PERSIST`        | `true`            | `false` = in-memory store (ephemeral)          |
+| `DB_DRIVER`      | `sqlite`          | `memory`, `sqlite`, or `postgres`              |
+| `PERSIST`        | `true`            | Legacy switch; `false` selects memory          |
 | `DATABASE_PATH`  | `/data/vat.db`    | SQLite database file path                      |
+| `DATABASE_URL`   | unset             | PostgreSQL connection URL                      |
 | `MIGRATIONS_DIR` | `./drizzle`       | Drizzle migrations folder (in the image)       |
+| `POSTGRES_MIGRATIONS_DIR` | `./drizzle-postgres` | PostgreSQL migrations folder                  |
 | `UPLOADS_DIR`    | `/app/uploads`    | Folder for uploaded game photos                |
 
 ### HTTPS (production)

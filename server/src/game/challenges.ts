@@ -23,14 +23,14 @@ export function effectiveStatus(session: ChallengeAttempt | null): ChallengeStat
   return session.status;
 }
 
-export function buildChallengeView(
+export async function buildChallengeView(
   gameId: string,
   landmarkId: string,
   teamId: string,
   spec: ChallengeSpec | null
-): ChallengeView | null {
+): Promise<ChallengeView | null> {
   if (!spec) return null;
-  const session = store.getChallengeSession(gameId, landmarkId, teamId);
+  const session = await store.getChallengeSession(gameId, landmarkId, teamId);
   if (!session) return null;
   const status = effectiveStatus(session);
   const view: ChallengeView = { status: status ?? session.status };
@@ -42,41 +42,41 @@ export function buildChallengeView(
   return view;
 }
 
-export function hasActiveChallenge(gameId: string, teamId: string): boolean {
-  return store
-    .getChallengeSessionsByGame(gameId)
+export async function hasActiveChallenge(gameId: string, teamId: string): Promise<boolean> {
+  return (await store
+    .getChallengeSessionsByGame(gameId))
     .some(
       (a) => a.teamId === teamId && (a.status === 'pending' || a.status === 'ready')
     );
 }
 
-export function decorateLandmarkStates(gameId: string): NominalLandmarkState[] {
+export async function decorateLandmarkStates(gameId: string): Promise<NominalLandmarkState[]> {
   const specMap = new Map(
-    store.getLandmarksByGame(gameId).map((l) => [l.id, l.challenge ?? null] as const)
+    (await store.getLandmarksByGame(gameId)).map((l) => [l.id, l.challenge ?? null] as const)
   );
-  const states = store.getLandmarkStates(gameId);
-  return states.map((st) => {
+  const states = await store.getLandmarkStates(gameId);
+  return Promise.all(states.map(async (st) => {
     const spec = specMap.get(st.landmarkId);
-    const view = st.teamId ? buildChallengeView(gameId, st.landmarkId, st.teamId, spec ?? null) : null;
+    const view = st.teamId ? await buildChallengeView(gameId, st.landmarkId, st.teamId, spec ?? null) : null;
     return view ? { ...st, challenge: view } : st;
-  });
+  }));
 }
 
 export interface NominalLandmarkState extends LandmarkState {
   challenge?: ChallengeView;
 }
 
-export function startChallengeForClaim(
+export async function startChallengeForClaim(
   gameId: string,
   landmarkId: string,
   teamId: string,
   spec: ChallengeSpec | null
-): void {
+): Promise<void> {
   if (!spec) return;
   if (spec.mode === 'delayed') {
-    store.startChallengeSession(gameId, landmarkId, teamId, spec.delayed?.delayMinutes);
+    await store.startChallengeSession(gameId, landmarkId, teamId, spec.delayed?.delayMinutes);
   } else {
-    store.startChallengeSession(gameId, landmarkId, teamId);
+    await store.startChallengeSession(gameId, landmarkId, teamId);
   }
 }
 
@@ -107,22 +107,22 @@ export interface ResolveChallengeResult {
   penaltyType?: Penalty['type'];
 }
 
-export function resolveChallengeForTeam(opts: ResolveChallengeOptions): ResolveChallengeResult {
+export async function resolveChallengeForTeam(opts: ResolveChallengeOptions): Promise<ResolveChallengeResult> {
   const { gameId, landmarkId, teamId, outcome } = opts;
 
-  const existing = store.getLandmarkStates(gameId).find((s) => s.landmarkId === landmarkId);
+  const existing = (await store.getLandmarkStates(gameId)).find((s) => s.landmarkId === landmarkId);
   if (!existing || existing.teamId !== teamId) {
     throw new AppError(400, 'Landmark not claimed by your team');
   }
   if (existing.locked) throw new AppError(400, 'Landmark is already locked');
 
-  const landmark = store.getLandmarksByGame(gameId).find((l) => l.id === landmarkId);
+  const landmark = (await store.getLandmarksByGame(gameId)).find((l) => l.id === landmarkId);
   const spec = getChallengeSpec(landmark ?? null);
 
-  let session = store.getChallengeSession(gameId, landmarkId, teamId);
+  let session = await store.getChallengeSession(gameId, landmarkId, teamId);
   assertNotAttempted(session);
   if (!session) {
-    session = store.startChallengeSession(gameId, landmarkId, teamId, spec?.mode === 'delayed' ? spec?.delayed?.delayMinutes : undefined);
+    session = await store.startChallengeSession(gameId, landmarkId, teamId, spec?.mode === 'delayed' ? spec?.delayed?.delayMinutes : undefined);
   }
 
   if (session.readyAt && new Date(session.readyAt).getTime() > Date.now() && spec?.mode === 'delayed') {
@@ -131,13 +131,13 @@ export function resolveChallengeForTeam(opts: ResolveChallengeOptions): ResolveC
     if (spec && spec.mode === 'delayed' && outcome === 'complete') {
       const d = spec.delayed;
       if (d?.returnToLandmark && landmark) {
-        if (!isWithinVicinity(opts.latitude, opts.longitude, landmark.latitude, landmark.longitude, store.getGame(gameId)?.config.vicinityRadius ?? 30)) {
+        if (!isWithinVicinity(opts.latitude, opts.longitude, landmark.latitude, landmark.longitude, (await store.getGame(gameId))?.config.vicinityRadius ?? 30)) {
           throw new AppError(400, 'You must be at the landmark to complete this challenge');
         }
       }
       if (d?.requiresPhoto) {
       if (!opts.photoId) throw new AppError(400, 'A photo is required to complete this challenge');
-      const p = store.getPhoto(opts.photoId);
+      const p = await store.getPhoto(opts.photoId);
       if (!p || p.gameId !== gameId) throw new AppError(400, 'Invalid photo for this challenge');
     }
   }
@@ -146,16 +146,16 @@ export function resolveChallengeForTeam(opts: ResolveChallengeOptions): ResolveC
   let penaltyType: Penalty['type'] | undefined;
 
   if (outcome === 'complete') {
-    store.upsertLandmarkState(gameId, landmarkId, teamId, true);
+    await store.upsertLandmarkState(gameId, landmarkId, teamId, true);
     if (spec?.instant?.penalty) {
       penaltyType = spec.instant.penalty.type;
       penaltyUntil = new Date(Date.now() + spec.instant.penalty.minutes * 60 * 1000).toISOString();
-      store.setPenalty(gameId, teamId, penaltyType, penaltyUntil);
+      await store.setPenalty(gameId, teamId, penaltyType, penaltyUntil);
     }
   }
 
-  const resolved = store.resolveChallengeSession(gameId, landmarkId, teamId, outcome, penaltyUntil);
-  const voidedTeams = outcome === 'complete' ? store.voidPendingChallenges(gameId, landmarkId, teamId) : [];
+  const resolved = await store.resolveChallengeSession(gameId, landmarkId, teamId, outcome, penaltyUntil);
+  const voidedTeams = outcome === 'complete' ? await store.voidPendingChallenges(gameId, landmarkId, teamId) : [];
 
   return { session: resolved, voidedTeams, penaltyUntil, penaltyType };
 }

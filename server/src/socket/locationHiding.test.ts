@@ -68,20 +68,20 @@ after(async () => {
 describe('location hiding during an active challenge', () => {
   test('challenging team does not see rival locations; others still see the challenger', async () => {
     const url = `http://127.0.0.1:${(httpServer.address() as any).port}/game`;
-    const game = store.createGame('map-x', CONFIG);
-    const teamA = store.addTeam(game.id, 'A', '#ff0000');
-    const teamB = store.addTeam(game.id, 'B', '#00ff00');
-    const teamC = store.addTeam(game.id, 'C', '#0000ff');
-    const [landmark] = store.addLandmarks(game.id, [
+    const game = await store.createGame('map-x', CONFIG);
+    const teamA = await store.addTeam(game.id, 'A', '#ff0000');
+    const teamB = await store.addTeam(game.id, 'B', '#00ff00');
+    const teamC = await store.addTeam(game.id, 'C', '#0000ff');
+    const [landmark] = await store.addLandmarks(game.id, [
       { name: 'LM', latitude: 49.28, longitude: -123.11, mapLandmarkIndex: 0 },
     ] as any);
 
     // Team A has an in-progress challenge
-    store.startChallengeSession(game.id, landmark.id, teamA.id);
+    await store.startChallengeSession(game.id, landmark.id, teamA.id);
 
     // Seed one ping per team before anyone joins
-    store.addLocationPing(game.id, teamA.id, 1, 1);
-    store.addLocationPing(game.id, teamB.id, 2, 2);
+    await store.addLocationPing(game.id, teamA.id, 1, 1);
+    await store.addLocationPing(game.id, teamB.id, 2, 2);
 
     clientA = Client(url, { transports: ['websocket'] });
     clientB = Client(url, { transports: ['websocket'] });
@@ -131,7 +131,7 @@ describe('location hiding during an active challenge', () => {
     // (covered by recipientTeamId !== senderTeamId condition)
 
     // Once A's challenge resolves, B's updates flow to A again
-    store.resolveChallengeSession(game.id, landmark.id, teamA.id, 'complete');
+    await store.resolveChallengeSession(game.id, landmark.id, teamA.id, 'complete');
     const aReceivesB = nextEvent(clientA, 'location_broadcast');
     clientB.emit('location_update', { latitude: 5, longitude: 5 });
     const atA = await aReceivesB;
