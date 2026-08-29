@@ -33,6 +33,26 @@ export const store = {
   deleteMap: (name: string): void => {
     getDb().delete(s.maps).where(eq(s.maps.name, name)).run();
   },
+  updateMap: (name: string, map: Omit<GameMap, 'id' | 'createdAt'>): GameMap | null => {
+    const existing = getDb().select().from(s.maps).where(eq(s.maps.name, name)).get() as
+      | GameMap
+      | undefined;
+    if (!existing) return null;
+    getDb()
+      .update(s.maps)
+      .set({
+        name: map.name,
+        centerLat: map.centerLat,
+        centerLng: map.centerLng,
+        defaultZoom: map.defaultZoom,
+        defaultVicinityRadius: map.defaultVicinityRadius,
+        winThreshold: map.winThreshold,
+        data: map.data,
+      })
+      .where(eq(s.maps.name, name))
+      .run();
+    return getDb().select().from(s.maps).where(eq(s.maps.id, existing.id)).get() as GameMap;
+  },
 
   // Games
   getGames: (): Game[] => getDb().select().from(s.games).all() as Game[],

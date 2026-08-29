@@ -1,8 +1,10 @@
 import { kml as kmlToGeoJson } from '@tmcw/togeojson';
 import { DOMParser } from '@xmldom/xmldom';
 import AdmZip from 'adm-zip';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { challengeSpecSchema } from '../middleware/validation';
 import type { GameMap } from './types';
 
 interface GeoFeature {
@@ -69,6 +71,25 @@ function descriptionText(description: unknown): string | undefined {
   return undefined;
 }
 
+function parseChallenge(raw: unknown, name: string | undefined): Record<string, unknown> | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const parsed = tryParseJson(raw);
+  if (parsed === undefined) {
+    console.warn(`[maps] Invalid challenge JSON${name ? ` on "${name}"` : ''} — ignoring challenge spec`);
+    return undefined;
+  }
+  const result = challengeSpecSchema.safeParse(parsed);
+  if (!result.success) {
+    console.warn(
+      `[maps] Invalid challenge spec${name ? ` on "${name}"` : ''}: ${result.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ')}`
+    );
+    return undefined;
+  }
+  return result.data as Record<string, unknown>;
+}
+
 function parseFeatures(kmlString: string): { features: GeoFeature[]; documentName: string | null } {
   const doc = new DOMParser().parseFromString(kmlString, 'text/xml');
   const collection = kmlToGeoJson(doc);
@@ -83,7 +104,7 @@ function parseFeatures(kmlString: string): { features: GeoFeature[]; documentNam
   ) => {
     const name =
       typeof props.name === 'string' && props.name.trim() ? props.name.trim() : undefined;
-    const challenge = typeof props.challenge === 'string' ? tryParseJson(props.challenge) : undefined;
+    const challenge = parseChallenge(props.challenge, name);
     const challengeText = props.challengeText
       ? String(props.challengeText)
       : descriptionText(props.description);
@@ -165,11 +186,45 @@ export function mapsDirectory(): string {
   return path.join(__dirname, '..', '..', 'maps');
 }
 
+export type MapFingerprintable = Pick<
+  GameMap,
+  'name' | 'centerLat' | 'centerLng' | 'defaultZoom' | 'defaultVicinityRadius' | 'winThreshold' | 'data'
+>;
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    return `{${keys
+      .map((k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function mapFingerprint(m: MapFingerprintable): string {
+  return crypto
+    .createHash('sha1')
+    .update(
+      stableStringify({
+        name: m.name,
+        centerLat: m.centerLat,
+        centerLng: m.centerLng,
+        defaultZoom: m.defaultZoom,
+        defaultVicinityRadius: m.defaultVicinityRadius,
+        winThreshold: m.winThreshold,
+        data: m.data,
+      })
+    )
+    .digest('hex');
+}
+
 export function seedMapsFromDirectory(
   dir: string,
   target: {
-    getMaps(): { name: string }[];
+    getMaps(): MapFingerprintable[];
     addMap(m: Omit<GameMap, 'id' | 'createdAt'>): unknown;
+    updateMap(name: string, m: Omit<GameMap, 'id' | 'createdAt'>): unknown;
     deleteMap(name: string): void;
   }
 ): void {
@@ -187,9 +242,13 @@ export function seedMapsFromDirectory(
       continue;
     }
     available.push(map.name);
-    if (!target.getMaps().some((m) => m.name === map.name)) {
+    const existing = target.getMaps().find((m) => m.name === map.name);
+    if (!existing) {
       target.addMap(map);
       console.log(`[maps] Seeded map "${map.name}" from ${entry}`);
+    } else if (mapFingerprint(existing) !== mapFingerprint(map)) {
+      target.updateMap(map.name, map);
+      console.log(`[maps] Updated map "${map.name}" from ${entry}`);
     }
   }
   for (const existing of target.getMaps()) {

@@ -7,7 +7,7 @@ import { generateJoinCode } from './helpers';
 import { mapsDirectory } from './kml';
 import fs from 'fs';
 import path from 'path';
-import { buildMapFromFile } from './kml';
+import { buildMapFromFile, mapFingerprint } from './kml';
 
 // pg is asynchronous; this is the same store operation set as the synchronous backends.
 const db = getPostgresDb();
@@ -20,6 +20,7 @@ export const store = {
   getMap: async (id: string) => { await wait(); return one<GameMap>(db.select().from(s.maps).where(eq(s.maps.id, id))); },
   addMap: async (map: Omit<GameMap, 'id' | 'createdAt'>) => { await wait(); const v = { ...map, id: uuid(), createdAt: new Date().toISOString() }; await db.insert(s.maps).values(v); return v; },
   deleteMap: async (name: string) => { await wait(); await db.delete(s.maps).where(eq(s.maps.name, name)); },
+  updateMap: async (name: string, map: Omit<GameMap, 'id' | 'createdAt'>) => { await wait(); const existing = await one<GameMap>(db.select().from(s.maps).where(eq(s.maps.name, name))); if (!existing) return null; await db.update(s.maps).set({ name: map.name, centerLat: map.centerLat, centerLng: map.centerLng, defaultZoom: map.defaultZoom, defaultVicinityRadius: map.defaultVicinityRadius, winThreshold: map.winThreshold, data: map.data }).where(eq(s.maps.name, name)); return await one<GameMap>(db.select().from(s.maps).where(eq(s.maps.id, existing.id))); },
 
   getGames: async () => { await wait(); return (await db.select().from(s.games)) as Game[]; },
   deleteGame: async (id: string) => { await wait(); const result = await db.delete(s.games).where(eq(s.games.id, id)); return (result.rowCount ?? 0) > 0; },
@@ -77,7 +78,14 @@ export async function seedPostgresMaps(): Promise<void> {
     try {
       const map = buildMapFromFile(fs.readFileSync(path.join(dir, entry)), entry);
       available.add(map.name);
-      if (!(await store.getMaps()).some((m) => m.name === map.name)) await store.addMap(map);
+      const existing = (await store.getMaps()).find((m) => m.name === map.name);
+      if (!existing) {
+        await store.addMap(map);
+        console.log(`[maps] Seeded map "${map.name}" from ${entry}`);
+      } else if (mapFingerprint(existing) !== mapFingerprint(map)) {
+        await store.updateMap(map.name, map);
+        console.log(`[maps] Updated map "${map.name}" from ${entry}`);
+      }
     } catch (err) { console.warn(`[maps] Skipping ${entry}: ${(err as Error).message}`); }
   }
   for (const existing of await store.getMaps()) if (!available.has(existing.name)) await store.deleteMap(existing.name);

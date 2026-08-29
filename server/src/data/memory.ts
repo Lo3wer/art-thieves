@@ -43,6 +43,13 @@ export const store = {
     const idx = maps.findIndex((m) => m.name === name);
     if (idx !== -1) maps.splice(idx, 1);
   },
+  updateMap: (name: string, map: Omit<GameMap, 'id' | 'createdAt'>) => {
+    const idx = maps.findIndex((m) => m.name === name);
+    if (idx === -1) return null;
+    const updated: GameMap = { ...map, id: maps[idx].id, createdAt: maps[idx].createdAt };
+    maps[idx] = updated;
+    return updated;
+  },
 
   // Games
   getGames: () => [...games],
