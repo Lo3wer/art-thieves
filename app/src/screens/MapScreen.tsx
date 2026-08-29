@@ -37,7 +37,26 @@ const MINIMAL_MAP_STYLE: any = {
   ],
 };
 
+const CARTO_API_KEY = (Constants.expoConfig?.extra as any)?.cartoApiKey as string | undefined;
+
+const CARTO_RASTER_STYLE: any = CARTO_API_KEY
+  ? {
+      version: 8,
+      sources: {
+        carto: {
+          type: 'raster',
+          tiles: [`https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`],
+          tileSize: 256,
+        },
+      },
+      layers: [
+        { id: 'carto-bg', type: 'raster', source: 'carto' },
+      ],
+    }
+  : null;
+
 const MAP_STYLE = (Constants.expoConfig?.extra as any)?.mapStyle
+  ?? CARTO_RASTER_STYLE
   ?? MINIMAL_MAP_STYLE;
 
 const LANDMARK_ICON: Record<LandmarkState['status'], 'lock' | 'unlock'> = {

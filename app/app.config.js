@@ -1,3 +1,6 @@
+const cartoApiKey =
+  process.env.CARTO_MAP_API_KEY || process.env.EXPO_PUBLIC_CARTO_MAP_API_KEY;
+
 module.exports = {
   expo: {
     name: 'Vancouver Art Thieves',
@@ -34,6 +37,7 @@ module.exports = {
         projectId: '5c4a620f-24f2-473b-aa77-c40aab96538a',
       },
       ...(process.env.EXPO_PUBLIC_MAP_STYLE ? { mapStyle: process.env.EXPO_PUBLIC_MAP_STYLE } : {}),
+      ...(cartoApiKey ? { cartoApiKey } : {}),
     },
   },
 };
